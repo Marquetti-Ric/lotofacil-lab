@@ -249,6 +249,10 @@ body[data-game="tm"] .cell.fix::after { padding: 2px 3px; font-size: 8px; }
 .passlist button[aria-current="true"] { border: 2px solid var(--accent); }
 .robolink { display: inline-flex; align-items: center; gap: 8px; padding: 10px 14px; border-radius: 12px; border: 2px dashed var(--accent); color: var(--accent); font-weight: 700; text-decoration: none; cursor: grab; background: var(--accent-soft); }
 .steps { margin: 0; padding-left: 20px; display: grid; gap: 6px; }
+.vt { border-collapse: collapse; width: 100%; font-size: 13px; }
+.vt th, .vt td { padding: 6px 8px; text-align: right; border-bottom: 1px solid var(--line); white-space: nowrap; }
+.vt th { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); font-weight: 600; }
+.vt td:first-child, .vt th:first-child { text-align: left; }
 .batch { border-top: 1px solid var(--line); padding-top: 12px; display: grid; gap: 8px; }
 .batch:first-child { border-top: 0; padding-top: 0; }
 @media (prefers-reduced-motion: reduce) { .spinner { animation: none; } .switch::after { transition: none; } }
@@ -329,7 +333,7 @@ body[data-game="tm"] .cell.fix::after { padding: 2px 3px; font-size: 8px; }
   <section class="view" id="v-fechamento" hidden>
     <div>
       <h1>Fechamento</h1>
-      <p class="lede" id="ledeFc">Escolha de 16 a 20 dezenas. O app calcula o menor número de jogos que encontrar com um prêmio mínimo garantido, caso as 15 sorteadas estejam entre as suas.</p>
+      <p class="lede" id="ledeFc">Escolha de 16 a 25 dezenas. O app calcula o menor número de jogos que encontrar com um prêmio mínimo garantido, caso as 15 sorteadas estejam entre as suas.</p>
     </div>
     <div class="card">
       <div class="row between"><span class="label">Suas dezenas</span><span class="pill" id="fcCount"></span></div>
@@ -350,6 +354,7 @@ body[data-game="tm"] .cell.fix::after { padding: 2px 3px; font-size: 8px; }
       </div>
       <button class="btn wide" id="fcRun" type="button" disabled>Calcular fechamento</button>
     </div>
+    <div class="card" id="fcViab" hidden></div>
     <div class="card" id="fcOut" hidden></div>
   </section>
 
@@ -2104,7 +2109,11 @@ if (typeof module !== "undefined") module.exports = TM;
 
 </script>
 <script>
-const SEEDS = { lf: `3813;24/10/2026;04,05,06,08,10,12,13,14,15,16,17,20,22,23,25
+const SEEDS = { lf: `3817;29/10/2026;02,06,08,10,11,12,13,15,16,18,19,22,23,24,25
+3816;28/10/2026;01,02,03,04,06,08,13,14,16,17,18,20,22,24,25
+3815;27/10/2026;03,05,06,09,10,11,12,13,14,15,16,17,19,23,25
+3814;26/10/2026;01,04,06,08,09,12,13,15,16,17,18,21,22,24,25
+3813;24/10/2026;04,05,06,08,10,12,13,14,15,16,17,20,22,23,25
 3812;23/10/2026;03,04,05,07,08,11,13,16,17,19,20,21,23,24,25
 3811;22/10/2026;01,03,05,07,08,09,10,11,12,15,16,18,19,23,25
 3810;21/10/2026;01,05,06,07,10,11,14,15,16,17,18,19,20,23,24
@@ -5916,7 +5925,11 @@ const SEEDS = { lf: `3813;24/10/2026;04,05,06,08,10,12,13,14,15,16,17,20,22,23,2
 4;20/10/2003;01,02,04,05,08,10,12,13,16,17,18,19,23,24,25
 3;13/10/2003;01,04,06,07,08,09,10,11,12,14,16,17,20,23,24
 2;06/10/2003;01,04,05,06,07,09,11,12,13,15,16,19,20,23,24
-1;29/09/2003;02,03,05,06,09,10,11,13,14,16,18,20,23,24,25`, ms: `3074;24/10/2026;02,03,20,25,39,57
+1;29/09/2003;02,03,05,06,09,10,11,13,14,16,18,20,23,24,25`, ms: `3078;29/10/2026;05,07,12,29,34,36
+3077;28/10/2026;02,14,18,31,35,40
+3076;27/10/2026;06,30,32,38,49,57
+3075;26/10/2026;07,10,14,27,36,55
+3074;24/10/2026;02,03,20,25,39,57
 3073;22/10/2026;04,13,23,28,41,58
 3072;20/10/2026;02,06,09,16,31,40
 3071;18/10/2026;12,22,41,45,51,52
@@ -8989,7 +9002,8 @@ const SEEDS = { lf: `3813;24/10/2026;04,05,06,08,10,12,13,14,15,16,17,20,22,23,2
 4;01/04/1996;01,05,06,27,42,59
 3;25/03/1996;10,11,29,30,36,47
 2;18/03/1996;09,37,39,41,43,49
-1;11/03/1996;04,05,30,33,41,52`, mm: `401;24/10/2026;12,14,20,26,30,44;1,4
+1;11/03/1996;04,05,30,33,41,52`, mm: `402;29/10/2026;06,07,13,35,36,43;3,5
+401;24/10/2026;12,14,20,26,30,44;1,4
 400;21/10/2026;03,06,22,28,29,48;2,3
 399;18/10/2026;36,40,42,43,46,49;1,2
 398;14/10/2026;03,04,05,31,38,41;1,4
@@ -9389,7 +9403,9 @@ const SEEDS = { lf: `3813;24/10/2026;04,05,06,08,10,12,13,14,15,16,17,20,22,23,2
 4;18/06/2022;06,23,25,33,34,47;1,2
 3;11/06/2022;01,09,17,30,31,44;1,4
 2;04/06/2022;13,16,35,41,42,47;2,6
-1;28/05/2022;01,03,07,15,23,44;2,4`, tm: `2459;24/10/2026;16,31,54,59,64,70,73;AMERICA/RN
+1;28/05/2022;01,03,07,15,23,44;2,4`, tm: `2461;29/10/2026;02,06,17,39,57,64,71;INTER LIMEIRA/SP
+2460;27/10/2026;03,14,18,24,25,41,70;VITORIA/BA
+2459;24/10/2026;16,31,54,59,64,70,73;AMERICA/RN
 2458;22/10/2026;14,45,49,52,55,59,80;TOMBENSE/MG
 2457;20/10/2026;25,28,51,53,56,59,69;PORTO VELHO/RO
 2456;18/10/2026;01,16,18,22,41,57,70;ANAPOLIS/GO
@@ -11859,14 +11875,14 @@ const GAMES = {
     prizeHits: [11, 12, 13], minHit: 11, bigFrom: 14, hitWord: "pontos", hitShort: "pts",
     overlapOpts: [[10, "10 (jogos bem diferentes)"], [11, "11 (recomendado)"], [12, "12"], [13, "13"], [14, "14 (sem restrição prática)"]], overlapDef: 11,
     chips: [20, 35, 50, 100, 200], budgetDef: 50,
-    fcMin: 16, fcMax: 20, fcSug: 18, fcK: [[14, "14 pontos"], [13, "13 pontos"], [12, "12 pontos"], [11, "11 pontos"]], fcKdef: 13,
+    fcMin: 16, fcMax: 25, fcSug: 18, fcK: [[14, "14 pontos"], [13, "13 pontos"], [12, "12 pontos"], [11, "11 pontos"]], fcKdef: 13,
     chiCrit: 36.4, meanHits: 9, expShare: "60%",
     cmpCols: [["pAny", "algum prêmio"], ["p13", "13+ pontos"], ["p14", "14 ou 15"]], topKey: "p15", topLabel: "15 pontos",
     valueFields: [["price", "Aposta de 15"], ["p11", "Prêmio 11"], ["p12", "Prêmio 12"], ["p13", "Prêmio 13"], ["limit", "Limite por mês"]],
     valoresNote: "14 e 15 pontos pagam valores variáveis, que dependem do número de ganhadores. Confira os preços oficiais na Caixa se mudarem.",
     chancesText: "Cada concurso sorteia 15 de 25 dezenas e todas as 3.268.760 combinações têm a mesma chance. Nenhum histórico, filtro ou agente muda isso. O que o app faz é organizar seus jogos: evitar repetição, distribuir o orçamento, montar fechamentos com garantia matemática e mostrar quanto você realmente ganhou e gastou.",
     ledeGerar: "O app divide o valor em apostas de 15 dezenas, diferentes entre si e dentro do perfil que você escolher.",
-    ledeFc: "Escolha de 16 a 20 dezenas. O app calcula o menor número de jogos que encontrar com um prêmio mínimo garantido, caso as 15 sorteadas estejam entre as suas.",
+    ledeFc: "Escolha de 16 a 25 dezenas. O app calcula o menor número de jogos que encontrar com um prêmio mínimo garantido, caso as 15 sorteadas estejam entre as suas. Com 25 dezenas a garantia vale sempre.",
     importFmt: "3810;21/10/2026;01,05,06,…", pastePlaceholder: "01: 01 02 05 07 09 10 13 14 16 18 20 22 23 24 25", loosePlaceholder: "01 02 05 07 …",
     placarLabel: "prêmios de 11 a 13 pontos", bigNote: " (sem contar 14/15)", wonLabel: "prêmios fixos",
     bigText: (n) => ` + ${n} ${n === 1 ? "jogo" : "jogos"} com 14 ou 15 (valor variável, confira na Caixa)`,
@@ -12394,7 +12410,8 @@ function paintFc() {
   const n = S.fc.size;
   $("#fcCount").textContent = `${n} de ${CFG.fcMin}–${CFG.fcMax}`;
   $("#fcCount").className = "pill" + (n >= CFG.fcMin && n <= CFG.fcMax ? " good" : "");
-  $("#fcRun").disabled = !(n >= CFG.fcMin && n <= CFG.fcMax);
+  $("#fcRun").disabled = !(n >= CFG.fcMin && n <= CFG.fcMax) && !fcWorker;
+  renderViab();
 }
 function initFcGrid() {
   buildGrid($("#fcGrid"), (n) => {
@@ -12413,6 +12430,61 @@ $("#fcStats").onclick = () => {
 };
 $("#fcClear").onclick = () => { S.fc = new Set(); paintFc(); $("#fcOut").hidden = true; };
 
+/* Viabilidade e fechamentos grandes da Lotofácil (21 a 25 dezenas) */
+const FC_TABLE = {"16-11":{"n":1,"lb":1},"16-12":{"n":1,"lb":1},"16-13":{"n":1,"lb":1},"16-14":{"n":1,"lb":1},"17-11":{"n":1,"lb":1},"17-12":{"n":1,"lb":1},"17-13":{"n":1,"lb":1},"17-14":{"n":8,"lb":5},"18-11":{"n":1,"lb":1},"18-12":{"n":1,"lb":1},"18-13":{"n":6,"lb":3},"18-14":{"n":24,"lb":18},"19-11":{"n":1,"lb":1},"19-12":{"n":4,"lb":2},"19-13":{"n":12,"lb":6},"19-14":{"n":141,"lb":64},"20-11":{"n":4,"lb":2},"20-12":{"n":4,"lb":3},"20-13":{"n":41,"lb":14},"20-14":{"n":477,"lb":204},"21-11":{"n":4,"lb":2},"21-12":{"n":25,"lb":6},"21-13":{"n":152,"lb":33},"21-14":{"n":1849,"lb":597},"22-11":{"n":12,"lb":3},"22-12":{"n":51,"lb":10},"22-13":{"n":372,"lb":74},"22-14":{"n":5276,"lb":1609},"23-11":{"n":22,"lb":4},"23-12":{"n":107,"lb":18},"23-13":{"n":885,"lb":161},"23-14":{"n":13813,"lb":4053},"24-11":{"n":39,"lb":7},"24-12":{"n":221,"lb":32},"24-13":{"n":1947,"lb":334},"24-14":{"n":33983,"lb":9614},"25-11":{"n":73,"lb":10},"25-12":{"n":420,"lb":55},"25-13":{"n":4153,"lb":671},"25-14":{"n":null,"lb":21648}};
+const BIGFC_SRC = "/* Fechamento grande da Lotof\u00e1cil (21 a 25 dezenas): cobertura exata por marca\u00e7\u00e3o.\n   Cada sorteio poss\u00edvel (15 das N escolhidas) tem um \u00edndice (posto colex).\n   Um jogo cobre todos os sorteios com quem divide pelo menos k dezenas. */\nconst BIGFC = (() => {\n  const K = 15;\n  const B = Array.from({ length: 26 }, (_, n) => { const r = Array(16).fill(0); r[0] = 1; for (let k = 1; k <= Math.min(n, 15); k++) r[k] = Math.round((r[k - 1] * (n - k + 1)) / k); return r; });\n  const C = (n, k) => (k < 0 || k > n || n < 0 ? 0 : B[n][k]);\n  const rank = (arr) => { let r = 0; for (let i = 0; i < K; i++) r += C(arr[i], i + 1); return r; }; // arr: 15 posi\u00e7\u00f5es ordenadas (0..N-1)\n\n  function subsets(arr, k, cb) {\n    const idx = Array.from({ length: k }, (_, i) => i), n = arr.length;\n    if (k > n) return;\n    while (true) {\n      cb(idx.map((i) => arr[i]));\n      let i = k - 1;\n      while (i >= 0 && idx[i] === n - k + i) i--;\n      if (i < 0) return;\n      idx[i]++;\n      for (let j = i + 1; j < k; j++) idx[j] = idx[j - 1] + 1;\n    }\n  }\n  function neighborCount(N, k) { let s = 0; for (let a = k; a <= K; a++) s += C(K, a) * C(N - K, K - a); return s; }\n\n  // Visita todos os sorteios a dist\u00e2ncia <= 15-k do jogo t (posi\u00e7\u00f5es 0..N-1, ordenadas)\n  function forNeighbors(N, k, t, cb) {\n    const inSet = t, out = [];\n    const has = new Uint8Array(N); t.forEach((x) => (has[x] = 1));\n    for (let x = 0; x < N; x++) if (!has[x]) out.push(x);\n    const buf = new Array(K);\n    for (let r = 0; r <= K - k; r++) {\n      if (r === 0) { cb(rank(t)); continue; }\n      subsets(inSet, r, (rem) => {\n        const remSet = new Set(rem);\n        const keep = inSet.filter((x) => !remSet.has(x));\n        subsets(out, r, (add) => {\n          // junta keep (ordenado) e add (ordenado)\n          let i = 0, j = 0, p = 0;\n          while (i < keep.length || j < add.length) buf[p++] = j >= add.length || (i < keep.length && keep[i] < add[j]) ? keep[i++] : add[j++];\n          cb(rank(buf));\n        });\n      });\n    }\n  }\n  function unrank(r) { // posto colex -> combina\u00e7\u00e3o de 15\n    const out = new Array(K);\n    for (let i = K; i >= 1; i--) { let c = i - 1; while (C(c + 1, i) <= r) c++; out[i - 1] = c; r -= C(c, i); }\n    return out;\n  }\n\n  // onProgress(feitos, total, jogos) ; shouldStop() -> true para cancelar\n  function build(nums, k, { onProgress, shouldStop, tries = 6 } = {}) {\n    const N = nums.length, M = C(N, K);\n    if (N < 16 || N > 25) throw new Error(\"Escolha de 16 a 25 dezenas.\");\n    const covered = new Uint8Array(M);\n    let left = M;\n    const picked = [];\n    let cursor = 0;\n    const mark = (t) => { let g = 0; forNeighbors(N, k, t, (r) => { if (!covered[r]) { covered[r] = 1; left--; g++; } }); return g; };\n    const gainOf = (t) => { let g = 0; forNeighbors(N, k, t, (r) => { if (!covered[r]) g++; }); return g; };\n    const nb = neighborCount(N, k);\n    const sample = nb > 200000 ? 2 : nb > 20000 ? 4 : tries;\n    let step = 0;\n    while (left > 0) {\n      if (shouldStop && shouldStop()) return null;\n      // candidatos: sorteios ainda descobertos (o primeiro a partir do cursor e alguns aleat\u00f3rios)\n      while (covered[cursor]) cursor++;\n      const cands = [cursor];\n      for (let s = 1; s < sample; s++) { let r = (Math.random() * M) | 0, guard = 0; while (covered[r] && guard++ < 50) r = (Math.random() * M) | 0; if (!covered[r]) cands.push(r); }\n      let best = null, bg = -1;\n      if (cands.length === 1) best = unrank(cands[0]);\n      else for (const c of cands) { const t = unrank(c); const g = gainOf(t); if (g > bg) { bg = g; best = t; } }\n      mark(best);\n      picked.push(best);\n      if (onProgress && (++step % 5 === 0 || left === 0)) onProgress(M - left, M, picked.length);\n    }\n    // remove jogos redundantes\n    const cnt = new Uint16Array(M);\n    for (const t of picked) forNeighbors(N, k, t, (r) => { if (cnt[r] < 65535) cnt[r]++; });\n    const keep = [];\n    for (let i = picked.length - 1; i >= 0; i--) {\n      let red = true;\n      forNeighbors(N, k, picked[i], (r) => { if (cnt[r] < 2) red = false; });\n      if (red) forNeighbors(N, k, picked[i], (r) => { cnt[r]--; }); else keep.push(picked[i]);\n    }\n    return keep.map((t) => t.map((p) => nums[p]).sort((a, b) => a - b));\n  }\n\n  // Confer\u00eancia independente: percorre todos os sorteios poss\u00edveis dentro das N\n  function verify(nums, tickets, k, { shouldStop } = {}) {\n    const N = nums.length, pos = new Map(nums.map((n, i) => [n, i]));\n    const tm = tickets.map((t) => t.reduce((m, x) => m | (1 << pos.get(x)), 0));\n    const pc = (x) => { x -= (x >>> 1) & 0x55555555; x = (x & 0x33333333) + ((x >>> 2) & 0x33333333); return (((x + (x >>> 4)) & 0x0f0f0f0f) * 0x01010101) >>> 24; };\n    let worst = 15, count = 0;\n    const idx = Array.from({ length: K }, (_, i) => i);\n    while (true) {\n      let d = 0; for (let i = 0; i < K; i++) d |= 1 << idx[i];\n      let b = 0; for (let j = 0; j < tm.length; j++) { const c = pc(tm[j] & d); if (c > b) { b = c; if (b >= k) break; } }\n      if (b < worst) worst = b;\n      if (worst < k) return { ok: false, worst };\n      if ((++count & 0xffff) === 0 && shouldStop && shouldStop()) return null;\n      let i = K - 1;\n      while (i >= 0 && idx[i] === N - K + i) i--;\n      if (i < 0) break;\n      idx[i]++;\n      for (let j = i + 1; j < K; j++) idx[j] = idx[j - 1] + 1;\n    }\n    return { ok: worst >= k, worst };\n  }\n\n  // Limite inferior simples (cobertura por esferas): nenhum fechamento pode ter menos jogos que isso\n  function lowerBound(N, k) { return Math.ceil(C(N, K) / neighborCount(N, k)); }\n\n  return { build, verify, lowerBound, neighborCount, C };\n})();\nif (typeof module !== \"undefined\") module.exports = BIGFC;\n";
+const LF_TOTAL = 3268760;
+function evFixoPorJogo() { return [11, 12, 13].reduce((a, h) => a + LF.probHits(h) * (S.settings["p" + h] || 0), 0); }
+function renderViab() {
+  const box = $("#fcViab");
+  if (CFG.id !== "lf") { box.hidden = true; return; }
+  const n = S.fc.size >= 16 ? S.fc.size : 0;
+  const Ns = n ? [n] : [18, 20, 22, 25];
+  const p = S.settings.price, ev = evFixoPorJogo();
+  const fmtOdds = (N) => { const o = LF_TOTAL / LF.comb(N, 15); return o <= 1.0001 ? "sempre" : "1 em " + intBR(o); };
+  const rows = [];
+  for (const N of Ns) for (const k of [11, 12, 13, 14]) {
+    const t = FC_TABLE[N + "-" + k]; if (!t) continue;
+    const jogos = t.n, custo = jogos ? jogos * p : t.lb * p;
+    rows.push(`<tr><td class="num">${N}</td><td class="num">${k}</td><td class="num">${jogos ? intBR(jogos) : "≥ " + intBR(t.lb)}</td><td class="num">${jogos ? brl(custo) : "inviável"}</td><td class="num">${fmtOdds(N)}</td><td class="num">${jogos ? brl(jogos * ev) : "—"}</td></tr>`);
+  }
+  box.hidden = false;
+  box.innerHTML = `<div class="row between"><h2>Viabilidade</h2><span class="pill">${n ? n + " dezenas" : "exemplos"}</span></div>
+    <div style="overflow-x:auto"><table class="vt"><thead><tr><th>Dezenas</th><th>Garante</th><th>Jogos</th><th>Custo</th><th>Condição</th><th>Volta média</th></tr></thead><tbody>${rows.join("")}</tbody></table></div>
+    <p class="small"><b>Condição</b> é a chance de as 15 sorteadas caírem dentro das suas dezenas; só aí a garantia vale. Com 25 dezenas ela vale sempre. <b>Volta média</b> é quanto os prêmios de 11 a 13 pontos devolvem, em média, por concurso: cerca de ${pct(ev / p)} do que se aposta, em qualquer fechamento. A garantia muda o pior caso, não a média.</p>
+    <p class="small muted">Quantidades de jogos calculadas e conferidas pelo app; podem existir fechamentos com menos jogos (o mínimo teórico é menor). Acima de 20 dezenas o cálculo leva de alguns segundos a cerca de um minuto no celular.</p>`;
+}
+let fcWorker = null, fcReject = null;
+function runBigFechamento(nums, k) {
+  return new Promise((resolve, reject) => {
+    fcReject = reject;
+    const src = BIGFC_SRC + `
+      let stop = false;
+      onmessage = (e) => {
+        if (e.data.stop) { stop = true; return; }
+        const { nums, k } = e.data;
+        try {
+          const t = BIGFC.build(nums, k, { shouldStop: () => stop, onProgress: (done, total, jogos) => postMessage({ prog: done / total, jogos }) });
+          if (!t) { postMessage({ cancel: true }); return; }
+          postMessage({ prog: 1, verificando: true, jogos: t.length });
+          const v = BIGFC.verify(nums, t, k, {});
+          postMessage({ done: true, tickets: t, ok: v.ok, worst: v.worst });
+        } catch (err) { postMessage({ error: err.message || String(err) }); }
+      };`;
+    try {
+      fcWorker = new Worker(URL.createObjectURL(new Blob([src], { type: "text/javascript" })));
+    } catch (e) { reject(new Error("Este navegador não deixou calcular em segundo plano.")); return; }
+    fcWorker.onmessage = (e) => {
+      const d = e.data;
+      if (d.prog !== undefined && !d.done) $("#fcRun").innerHTML = `<span class="spinner"></span> ${d.verificando ? "Conferindo todas as combinações…" : `Calculando… ${Math.round(d.prog * 100)}% · ${d.jogos} jogos`} (toque para parar)`;
+      if (d.done) { fcWorker.terminate(); fcWorker = null; resolve(d); }
+      if (d.cancel) { fcWorker.terminate(); fcWorker = null; reject(new Error("Cálculo interrompido.")); }
+      if (d.error) { fcWorker.terminate(); fcWorker = null; reject(new Error(d.error)); }
+    };
+    fcWorker.onerror = (e) => { fcWorker && fcWorker.terminate(); fcWorker = null; reject(new Error("O cálculo falhou neste navegador: " + (e.message || ""))); };
+    fcWorker.postMessage({ nums, k });
+  });
+}
 function computeFechamento(nums, k, trevoPair) {
   const r = C.fechamento(nums, k, isMM() ? { trevoPair: trevoPair || null } : undefined);
   const v = C.verifyFechamento(nums, r.tickets, k);
@@ -12426,7 +12498,7 @@ function renderFc(nums, k, r) {
     <div class="row between"><h2>${r.tickets.length} jogos · ${brl(cost)}</h2><span class="pill ${r.verified ? "good" : "warn"}">${r.verified ? "garantia conferida" : "garantia não confirmada"}</span></div>
     <p class="small">Se as ${CFG.drawK || CFG.K} dezenas sorteadas estiverem entre as suas ${nums.length}, pelo menos um jogo faz <b>${r.worst} ${CFG.hitWord}</b> ou mais.${isMM() ? " Os trevos não entram na garantia." : ""}</p>
     <div class="kpis">
-      <div class="kpi"><b class="num">1 em ${intBR(r.conditionOdds)}</b><span>chance de as ${CFG.drawK || CFG.K} saírem entre as suas ${nums.length}</span></div>
+      <div class="kpi"><b class="num">${r.conditionOdds <= 1.0001 ? "Sempre" : "1 em " + intBR(r.conditionOdds)}</b><span>chance de as ${CFG.drawK || CFG.K} saírem entre as suas ${nums.length}</span></div>
       ${isTM() ? "" : `<div class="kpi"><b>${brl(r.full * p)}</b><span>custo da aposta múltipla com as ${nums.length} (${intBR(r.full)} jogos)</span></div>`}
     </div>
     ${budget > 0 && cost > budget ? `<div class="note warn">Passa do valor da aba Gerar (${brl(budget)}). Diminua a garantia ou as dezenas.</div>` : ""}
@@ -12441,8 +12513,21 @@ function renderFc(nums, k, r) {
   $("#fcPass").onclick = () => openPass(saveOnce(r, fName, r.tickets, { fechamento: { nums, k } }));
   $("#fcCopy").onclick = () => copyText(ticketsText(r.tickets));
 }
-$("#fcRun").addEventListener("click", () => {
+$("#fcRun").addEventListener("click", async () => {
+  if (fcWorker) { fcWorker.terminate(); fcWorker = null; if (fcReject) fcReject(new Error("Cálculo interrompido.")); fcReject = null; return; }
   const nums = [...S.fc].sort((a, b) => a - b), k = +$("#fcK").value;
+  if (CFG.id === "lf" && nums.length > 20) {
+    const t = FC_TABLE[nums.length + "-" + k];
+    if (!t || !t.n || t.n > 6000) { toast(`${nums.length} dezenas com garantia de ${k} pontos precisa de milhares de jogos (veja a tabela de viabilidade). Escolha uma garantia menor.`); return; }
+    $("#fcRun").innerHTML = `<span class="spinner"></span> Calculando…`;
+    try {
+      const d = await runBigFechamento(nums, k);
+      renderFc(nums, k, { tickets: d.tickets, full: LF.comb(nums.length, 15), conditionOdds: LF_TOTAL / LF.comb(nums.length, 15), verified: d.ok, worst: d.worst });
+      $("#fcOut").scrollIntoView({ behavior: "smooth", block: "start" });
+    } catch (e) { toast(e.message); }
+    $("#fcRun").textContent = "Calcular fechamento"; paintFc();
+    return;
+  }
   const est = C.fechamentoCost(nums.length, k);
   $("#fcRun").disabled = true;
   $("#fcRun").innerHTML = `<span class="spinner"></span> Calculando${est.ops > 20e6 ? " (pode levar alguns segundos)" : ""}…`;
@@ -12807,7 +12892,7 @@ function agentTools(addCard) {
     },
     {
       name: "gerar_fechamento",
-      description: `Monta um fechamento: com ${CFG.fcMin} a ${CFG.fcMax} dezenas escolhidas, gera o menor conjunto de jogos encontrado que garante 'garantia' acertos se as ${CFG.K} sorteadas estiverem entre elas. Se 'dezenas' vier vazio, usa as N mais frequentes dos últimos 30 concursos. Retorna jogos, custo e chance da condição.`,
+      description: `Monta um fechamento: com ${CFG.fcMin} a ${CFG.id === "lf" ? 20 : CFG.fcMax} dezenas escolhidas, gera o menor conjunto de jogos encontrado que garante 'garantia' acertos se as ${CFG.K} sorteadas estiverem entre elas. Se 'dezenas' vier vazio, usa as N mais frequentes dos últimos 30 concursos. Retorna jogos, custo e chance da condição.`,
       inputSchema: { type: "object", properties: {
         quantidade: { type: "integer", description: `Quantas dezenas (${CFG.fcMin} a ${CFG.fcMax})` },
         dezenas: { type: "array", items: { type: "integer" }, description: "Dezenas escolhidas (opcional)" },
@@ -12819,9 +12904,9 @@ function agentTools(addCard) {
         if (nums.length < CFG.fcMin) {
           const st = C.stats(S.results.slice(0, 30));
           const extra = C.ALL.filter((n) => !nums.includes(n)).sort((a, b) => st.freq[b] - st.freq[a] || a - b);
-          nums = [...nums, ...extra].slice(0, Math.min(Math.max(q, CFG.fcMin), CFG.fcMax));
+          nums = [...nums, ...extra].slice(0, Math.min(Math.max(q, CFG.fcMin), CFG.id === "lf" ? 20 : CFG.fcMax));
         }
-        nums = nums.slice(0, CFG.fcMax).sort((a, b) => a - b);
+        nums = nums.slice(0, CFG.id === "lf" ? 20 : CFG.fcMax).sort((a, b) => a - b);
         const ks = CFG.fcK.map(([v]) => v);
         const k = Math.min(Math.max(...ks), Math.max(Math.min(...ks), Number(inp.garantia) || CFG.fcKdef));
         const r = computeFechamento(nums, k, null);
