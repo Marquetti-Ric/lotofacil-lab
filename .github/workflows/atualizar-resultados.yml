@@ -1,0 +1,31 @@
+name: Atualizar resultados
+
+on:
+  schedule:
+    # 23:20 e 00:50 no horário de Brasília (sorteios às 21h; 11h aos domingos na Timemania)
+    - cron: "20 2 * * *"
+    - cron: "50 3 * * *"
+    - cron: "40 15 * * 0"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  atualizar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: node scripts/atualizar-resultados.mjs
+      - name: Salvar resultados novos
+        run: |
+          if [ -n "$(git status --porcelain data)" ]; then
+            git config user.name "lotofacil-lab-bot"
+            git config user.email "actions@users.noreply.github.com"
+            git add data
+            git commit -m "Resultados atualizados $(date -u +%F)"
+            git push
+          fi
