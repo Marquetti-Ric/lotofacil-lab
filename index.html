@@ -255,6 +255,11 @@ body[data-game="tm"] .cell.fix::after { padding: 2px 3px; font-size: 8px; }
 .vt td:first-child, .vt th:first-child { text-align: left; }
 .batch { border-top: 1px solid var(--line); padding-top: 12px; display: grid; gap: 8px; }
 .batch:first-child { border-top: 0; padding-top: 0; }
+.cmp { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.cmp select, .cmp input { background: var(--sunk); border: 1px solid transparent; border-radius: 10px; padding: 8px 10px; min-width: 0; }
+.cmp select { flex: 1 1 180px; }
+.cmp input { width: 110px; }
+.sim { display: grid; gap: 8px; padding: 10px 12px; border-radius: 12px; background: var(--soft, rgba(127,127,127,.08)); }
 @media (prefers-reduced-motion: reduce) { .spinner { animation: none; } .switch::after { transition: none; } }
 </style>
 
@@ -12587,8 +12592,9 @@ function renderStats() {
 }
 
 /* ---------- CONFERIR ---------- */
-function checkBatch(b) {
-  const r = S.results.find((x) => x.concurso === b.alvo);
+const cmpSel = {}; // lote -> concurso escolhido para conferir (simulação, não entra no placar)
+function checkBatch(b, alvo = b.alvo) {
+  const r = S.results.find((x) => x.concurso === alvo);
   if (!r) return null;
   const set = new Set(r.dezenas);
   if (isMM()) {
@@ -12619,6 +12625,10 @@ function checkBatch(b) {
   const big = rows.reduce((a, x) => a + x.big, 0);
   return { r, set, rows, fixedWon, big, best: Math.max(...rows.map((x) => x.best)) };
 }
+function ticketsChecked(c) {
+  const ord = c.rows.map((x, i) => [x, i]);
+  return `<div class="tickets">${ord.map(([x, i]) => `<div class="ticket"><span class="idx">${pad(i + 1)}</span><div>${betLabel(x.t)}${ballsHTML(x.t, c.set)}</div><span class="pts" style="color:var(--${x.best >= CFG.minHit ? "good" : "muted"})">${x.h} ${CFG.hitShort}${(isMM() ? x.won : isMulti(x.t) && x.won) ? "<br>" + brl(x.won) : ""}</span></div>`).join("")}</div>`;
+}
 function renderConferir() {
   let spent = 0, won = 0, checked = 0, bigs = 0;
   S.batches.forEach((b) => { const c = checkBatch(b); if (c) { spent += b.cost; won += c.fixedWon; checked++; bigs += c.big; } });
@@ -12640,15 +12650,31 @@ function renderConferir() {
       const c = checkBatch(b);
       const head = `<div class="row between"><div><b>${esc(b.name)}</b><div class="small muted">${(b.bets || b.tickets).length} apostas · ${brl(b.cost)} · concurso ${b.alvo ?? "?"}${isTM() ? ` · time: ${timeName(b.time)}` : ""}</div></div>
         ${c ? `<span class="pill ${c.best >= CFG.minHit ? "good" : ""}">${c.bestLabel || `${c.best} ${CFG.hitShort} no melhor`}</span>` : `<span class="pill warn">aguardando</span>`}</div>`;
-      const body = c ? `<p class="small">Resultado ${c.r.concurso}${isTM() && c.r.time ? ` (time sorteado: ${timeName(c.r.time)})` : ""}: ${CFG.wonLabel} <b>${brl(c.fixedWon)}</b>${c.big ? CFG.bigText(c.big) : ""}.</p>
-        <details><summary class="small">Ver jogos conferidos</summary><div class="tickets">${c.rows.map((x, i) => `<div class="ticket"><span class="idx">${pad(i + 1)}</span><div>${betLabel(x.t)}${ballsHTML(x.t, c.set)}</div><span class="pts" style="color:var(--${x.best >= CFG.minHit ? "good" : "muted"})">${x.h} ${CFG.hitShort}${(isMM() ? x.won : isMulti(x.t) && x.won) ? "<br>" + brl(x.won) : ""}</span></div>`).join("")}</div></details>`
-        : `<details><summary class="small">Ver jogos</summary>${betsHTML(b.bets || b.tickets)}</details>`;
+      const cc = cmpSel[b.id], cx = cc && cc !== b.alvo ? checkBatch(b, cc) : null;
+      const opts = S.results.slice(0, 200).map((r) => `<option value="${r.concurso}"${r.concurso === cc ? " selected" : ""}>${r.concurso} · ${r.data}${r.concurso === b.alvo ? " (do lote)" : ""}</option>`).join("");
+      const cmp = `<div class="cmp"><span class="small muted">Conferir com o concurso</span>
+          <select data-cmp aria-label="Concurso para conferir"><option value="">escolher…</option>${opts}</select>
+          <input data-cmpnum type="number" inputmode="numeric" placeholder="outro nº" aria-label="Número do concurso" value="${cc && !S.results.slice(0, 200).some((r) => r.concurso === cc) ? cc : ""}"></div>
+        ${cc && cc !== b.alvo && !cx ? `<p class="small muted">Não tenho o resultado do concurso ${cc}. Atualize em Dados ou escolha outro.</p>` : ""}
+        ${cx ? `<div class="sim"><p class="small"><span class="pill">simulação</span> Concurso ${cx.r.concurso} (${cx.r.data})${isTM() && cx.r.time ? `, time sorteado: ${timeName(cx.r.time)}` : ""}: ${cx.bestLabel || `${cx.best} ${CFG.hitShort} no melhor`} · ${CFG.wonLabel} <b>${brl(cx.fixedWon)}</b>${cx.big ? CFG.bigText(cx.big) : ""}. Não entra no placar.</p>
+          ${ballsHTML(cx.r.dezenas, new Set(cx.r.dezenas))}
+          <details open><summary class="small">Jogos conferidos com o ${cx.r.concurso}</summary>${ticketsChecked(cx)}</details></div>` : ""}`;
+      const body = (c ? `<p class="small">Resultado ${c.r.concurso}${isTM() && c.r.time ? ` (time sorteado: ${timeName(c.r.time)})` : ""}: ${CFG.wonLabel} <b>${brl(c.fixedWon)}</b>${c.big ? CFG.bigText(c.big) : ""}.</p>
+        <details><summary class="small">Ver jogos conferidos</summary>${ticketsChecked(c)}</details>`
+        : `<details><summary class="small">Ver jogos</summary>${betsHTML(b.bets || b.tickets)}</details>`) + cmp;
       return `<div class="batch" data-id="${b.id}">${head}${body}<div class="row">${c ? "" : `<button class="btn small" type="button" data-act="pass">${(b.registrados || []).length >= (b.bets || b.tickets).length ? "Registrados ✓" : (b.registrados || []).length ? `Continuar na Caixa (${(b.registrados || []).length}/${(b.bets || b.tickets).length})` : "Passar para a Caixa"}</button>`}<button class="btn line small" type="button" data-act="copy">Copiar</button><button class="btn line small" type="button" data-act="del">Excluir</button></div></div>`;
     }).join("");
   }
   $("#looseConc").innerHTML = S.results.slice(0, 60).map((r) => `<option value="${r.concurso}">${r.concurso} · ${r.data}</option>`).join("");
 }
 let pendingDelete = null;
+$("#batches").addEventListener("change", (e) => {
+  const el = e.target.closest("[data-cmp],[data-cmpnum]"); if (!el) return;
+  const id = el.closest(".batch").dataset.id, v = parseInt(el.value, 10);
+  if (v > 0) cmpSel[id] = v; else delete cmpSel[id];
+  renderConferir();
+  const box = document.querySelector(`.batch[data-id="${id}"] .sim`); if (box) box.scrollIntoView({ behavior: "smooth", block: "nearest" });
+});
 $("#batches").addEventListener("click", (e) => {
   const btn = e.target.closest("button[data-act]"); if (!btn) return;
   const id = btn.closest(".batch").dataset.id, b = S.batches.find((x) => x.id === id);
