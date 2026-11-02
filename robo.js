@@ -13,9 +13,10 @@
     ms: { nome: "Mega-Sena", rota: "mega-sena", max: 60, min: 6, maxSel: 20 },
     mm: { nome: "+Milionária", rota: "mais-milionaria", max: 50, min: 6, maxSel: 12 },
     tm: { nome: "Timemania", rota: "timemania", max: 80, min: 10, maxSel: 10 },
+    lm: { nome: "Lotomania", rota: "lotomania", max: 100, min: 50, maxSel: 50 },
   };
   var wait = function (ms) { return new Promise(function (r) { setTimeout(r, ms); }); };
-  var pad = function (n) { return (n < 10 ? "0" : "") + n; };
+  var pad = function (n) { return n === 100 ? "00" : (n < 10 ? "0" : "") + n; }; // Lotomania: 00 = 100
   var norm = function (t) { return String(t || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toUpperCase().replace(/[^A-Z0-9/]+/g, " ").replace(/\s*\/\s*/g, "/").trim(); };
   var txt = function () { return document.body.innerText || ""; };
 
@@ -25,6 +26,7 @@
     if (h.indexOf("mega-sena") >= 0) return "ms";
     if (h.indexOf("milionaria") >= 0) return "mm";
     if (h.indexOf("timemania") >= 0) return "tm";
+    if (h.indexOf("lotomania") >= 0) return "lm";
     return null;
   }
   function total() {
@@ -35,10 +37,10 @@
     var m = txt().match(/Valor da Aposta:\s*R\$\s*([\d.,]+)/i);
     return m ? parseFloat(m[1].replace(/\./g, "").replace(",", ".")) : NaN;
   }
-  function numEl(n) { return document.getElementById("n" + pad(n)); }
+  function numEl(n) { return document.getElementById("n" + pad(n)) || (n === 100 ? document.getElementById("n100") : null); }
   function selecionados() {
     return Array.prototype.slice.call(document.querySelectorAll('a[id^="n"].selected'))
-      .map(function (a) { return +a.id.slice(1); }).filter(function (n) { return n > 0; }).sort(function (a, b) { return a - b; });
+      .map(function (a) { var v = +a.id.slice(1); return v === 0 && jogoDaPagina() === "lm" ? 100 : v; }).filter(function (n) { return n > 0; }).sort(function (a, b) { return a - b; });
   }
   // Trevos da +Milionária: elementos clicáveis de 1 a 6 dentro de uma área que fala de "trevo"
   function trevoEls() {
@@ -84,7 +86,7 @@
       if (mt) { time = mt[1].trim(); return; }
       var limpa = linha.replace(/^\s*\d{1,3}\s*[:.)\-]\s+/, "");
       var partes = limpa.split(/\s*(?:\||\+|trevos?:?)\s*/i);
-      var dez = (partes[0].match(/\d{1,2}/g) || []).map(Number).filter(function (n) { return n >= 1 && n <= cfg.max; });
+      var dez = (partes[0].match(/\d{1,2}/g) || []).map(function (x) { return g === "lm" && +x === 0 ? 100 : +x; }).filter(function (n) { return n >= 1 && n <= cfg.max; });
       dez = dez.filter(function (n, ix) { return dez.indexOf(n) === ix; }).sort(function (a, b) { return a - b; });
       var tre = [];
       if (g === "mm") {
@@ -120,7 +122,7 @@
   $(".parar").onclick = function () { parar = true; };
   function mostrarJogo() {
     var g = jogoDaPagina();
-    $(".jogo").textContent = g ? "Página: " + JOGOS[g].nome : "Abra a página de uma modalidade (Lotofácil, Mega-Sena, +Milionária ou Timemania).";
+    $(".jogo").textContent = g ? "Página: " + JOGOS[g].nome : "Abra a página de uma modalidade (Lotofácil, Mega-Sena, +Milionária, Timemania ou Lotomania).";
   }
   mostrarJogo();
   window.addEventListener("hashchange", mostrarJogo);

@@ -6,6 +6,7 @@ const JOGOS = {
   ms: { caixa: "megasena", alt: "megasena", n: 6 },
   mm: { caixa: "maismilionaria", alt: "maismilionaria", n: 6 },
   tm: { caixa: "timemania", alt: "timemania", n: 7 },
+  lm: { caixa: "lotomania", alt: "lotomania", n: 20 },
 };
 const ALIAS = { "BRASIL DE PELOTAS/RS": "BRASIL/RS", "SAORAIMUNDO/RR": "SAO RAIMUNDO/RR", "SAMP CORREA/MA": "SAMPAIO CORREA/MA", "CEILANDIA ESPORTE/DF": "CEILANDIA/DF", "ATLETICO-MG/MG": "ATLETICO/MG", "VIORIA/BA": "VITORIA/BA", "CONFIANCA SAF/SE": "CONFIANCA/SE", "ATLETICO/PR": "ATHLETICO/PR" };
 const normTime = (t) => { const s = String(t || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toUpperCase().replace(/\s+/g, " ").replace(/ \//g, "/").trim(); return ALIAS[s] || s; };
