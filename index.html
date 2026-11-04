@@ -392,8 +392,12 @@ body[data-game="tm"] .cell.fix::after { padding: 2px 3px; font-size: 8px; }
     <div class="card" id="btCard">
       <div class="row between"><h2>Testar estratégia</h2><span class="pill" id="btCount"></span></div>
       <p class="small">Para cada concurso do histórico, o app monta um jogo com cada lógica olhando só os concursos anteriores, e confere com o resultado que saiu. É o teste de "se eu tivesse jogado assim desde sempre".</p>
+      <div class="field" id="btTipoBox" hidden>
+        <label class="label" for="btTipo">O que testar</label>
+        <select id="btTipo"><option value="15">1 jogo de 15 dezenas</option><option value="18">18 dezenas para fechamento</option></select>
+      </div>
       <div class="row">
-        <div class="field" style="flex:1"><label class="label" for="btWin">Olhar os últimos</label><select id="btWin"><option value="10">10 concursos</option><option value="20" selected>20 concursos</option><option value="50">50 concursos</option><option value="100">100 concursos</option></select></div>
+        <div class="field" style="flex:1"><label class="label" for="btWin">Olhar os últimos</label><select id="btWin"><option value="10">10 concursos</option><option value="20" selected>20 concursos</option><option value="30">30 concursos</option><option value="50">50 concursos</option><option value="100">100 concursos</option></select></div>
         <div class="field" style="flex:1"><label class="label" for="btLimit">Testar em</label><select id="btLimit"><option value="0" selected>todo o histórico</option><option value="1000">últimos 1.000</option><option value="200">últimos 200</option></select></div>
       </div>
       <button class="btn" type="button" id="btRun">Rodar teste</button>
@@ -1001,7 +1005,54 @@ const LF = (() => {
     });
   }
 
-  return { wpick, PREFS, prefWeights, LOGICS, backtest, expand, pickSet, shiftTickets, STRATEGIES, MULTI, buildPortfolio, portfolioMetrics, ALL, PRIMOS, MOLDURA, TOTAL_COMB, comb, probHits, metrics, FILTER_DEFS, passes, overlap, generateBudget,
+  /* ---------- Teste de estratégias de 18 dezenas (para fechamento) ---------- */
+  const LOGICS18 = {
+    fora_quentes: "10 que não saíram no último + 8 mais quentes",
+    ultimo_quentes: "15 do último + 3 mais quentes",
+    ultimo_frias: "15 do último + 3 mais frias",
+    quentes: "18 mais quentes",
+    frias: "18 mais frias",
+    atrasadas: "18 mais atrasadas",
+    aleatorio: "18 ao acaso",
+  };
+  // Ao acaso: das 15 sorteadas, quantas caem dentro de 18 escolhidas (hipergeométrica)
+  const P18 = (x) => (comb(15, x) * comb(10, 18 - x)) / comb(25, 18);
+  const MEDIA18 = (15 * 18) / 25, SD18 = Math.sqrt(15 * (18 / 25) * (7 / 25) * (10 / 24));
+  function pick18(k, hist, st) {
+    const ult = new Set(hist[0].dezenas);
+    const quente = (a, b) => st.freq[b] - st.freq[a] || st.atraso[a] - st.atraso[b] || a - b;
+    const fria = (a, b) => st.freq[a] - st.freq[b] || st.atraso[b] - st.atraso[a] || a - b;
+    if (k === "aleatorio") return shuffle([...ALL]).slice(0, 18);
+    if (k === "fora_quentes") { const fora = ALL.filter((n) => !ult.has(n)); return [...fora, ...ALL.filter((n) => ult.has(n)).sort(quente).slice(0, 18 - fora.length)]; }
+    if (k === "ultimo_quentes") return [...ult, ...ALL.filter((n) => !ult.has(n)).sort(quente).slice(0, 3)];
+    if (k === "ultimo_frias") return [...ult, ...ALL.filter((n) => !ult.has(n)).sort(fria).slice(0, 3)];
+    const sc = scoreFor(k, st);
+    return ALL.slice().sort((a, b) => sc(b) - sc(a) || a - b).slice(0, 18);
+  }
+  // Para cada concurso: monta as 18 só com os concursos anteriores e conta quantas das 15 sorteadas ficaram dentro.
+  function backtest18(results, { window = 30, limit = 0, logics = Object.keys(LOGICS18) } = {}) {
+    const out = {};
+    logics.forEach((k) => { out[k] = { k, nome: LOGICS18[k], n: 0, soma: 0, dentro: { 13: 0, 14: 0, 15: 0 } }; });
+    const lastIdx = results.length - 1 - window;
+    const first = limit ? Math.max(0, lastIdx - limit + 1) : 0;
+    for (let i = lastIdx; i >= first; i--) {
+      const draw = new Set(results[i].dezenas);
+      const hist = results.slice(i + 1, i + 1 + window);
+      const st = stats(hist);
+      for (const k of logics) {
+        let h = 0; for (const n of pick18(k, hist, st)) if (draw.has(n)) h++;
+        const o = out[k]; o.n++; o.soma += h; if (h >= 13) o.dentro[h]++;
+      }
+    }
+    const p13 = P18(13) + P18(14) + P18(15), p15 = P18(15);
+    return Object.values(out).map((o) => {
+      const media = o.soma / o.n;
+      return { ...o, media, z: (media - MEDIA18) / (SD18 / Math.sqrt(o.n)), v13: o.dentro[13] + o.dentro[14] + o.dentro[15], v15: o.dentro[15],
+        esp13: o.n * p13, esp15: o.n * p15 };
+    });
+  }
+
+  return { LOGICS18, backtest18, MEDIA18, SD18, wpick, PREFS, prefWeights, LOGICS, backtest, expand, pickSet, shiftTickets, STRATEGIES, MULTI, buildPortfolio, portfolioMetrics, ALL, PRIMOS, MOLDURA, TOTAL_COMB, comb, probHits, metrics, FILTER_DEFS, passes, overlap, generateBudget,
     fechamento, fechamentoCost, verifyFechamento, stats, filterCoverage, hits, parseRows, parseText, shuffle };
 })();
 if (typeof module !== "undefined") module.exports = LF;
@@ -15635,13 +15686,32 @@ function renderBacktest(rows) {
     <p class="small">${CFG.btNote(n, fmt)}</p>
   </div>`;
 }
+// 18 dezenas: conta quantas das 15 sorteadas caíram dentro das 18. O fechamento só garante o prêmio quando as 15 estão dentro.
+function renderBacktest18(rows) {
+  const n = rows[0].n;
+  const fmt = (v, d = 2) => v.toLocaleString("pt-BR", { minimumFractionDigits: d, maximumFractionDigits: d });
+  const pct = (v) => fmt((v / n) * 100, 1) + "%";
+  rows.sort((a, b) => b.media - a.media);
+  $("#btOut").innerHTML = `<div class="cmp" style="margin-top:6px">
+    ${rows.map((r) => `<div class="cmprow">
+      <div class="row between"><b>${r.nome}</b>${verdict(r.z)}</div>
+      <div class="cmpnums">
+        <div><b>${fmt(r.media)}</b><span>das 15 dentro das 18 (acaso ${fmt(C.MEDIA18)})</span></div>
+        <div><b>${pct(r.v13)}</b><span>13 ou mais dentro (acaso ${pct(r.esp13)})</span></div>
+        <div><b>${intBR(r.v15)}</b><span>vezes com as 15 dentro (esperado ${fmt(r.esp15, 1)})</span></div>
+      </div>
+    </div>`).join("")}
+    <p class="small">Em ${intBR(n)} concursos, diferenças até cerca de ${fmt(2 * C.SD18 / Math.sqrt(n))} na média são variação normal. “Acima do acaso” só valeria atenção se aparecesse sempre, em qualquer janela e período. A garantia do fechamento só vale nos concursos em que as 15 sorteadas caem dentro das 18.</p>
+  </div>`;
+}
 $("#btRun").addEventListener("click", () => {
   const b = $("#btRun");
   b.disabled = true; b.innerHTML = `<span class="spinner"></span> Testando…`;
   setTimeout(() => {
     try {
       if (S.results.length < 30) throw new Error("Carregue mais resultados para testar.");
-      renderBacktest(runBacktest(+$("#btWin").value, +$("#btLimit").value));
+      if (CFG.id === "lf" && $("#btTipo").value === "18") renderBacktest18(C.backtest18(S.results, { window: +$("#btWin").value, limit: +$("#btLimit").value }));
+      else renderBacktest(runBacktest(+$("#btWin").value, +$("#btLimit").value));
     } catch (e) { toast(e.message); }
     b.disabled = false; b.textContent = "Rodar teste";
   }, 30);
@@ -16490,6 +16560,7 @@ function applyGame() {
   $("#importFmt").textContent = CFG.importFmt;
   $("#chancesText").textContent = CFG.chancesText;
   $("#fcSug").textContent = `Sugerir ${CFG.fcSug}`;
+  $("#btTipoBox").hidden = CFG.id !== "lf"; $("#btOut").innerHTML = "";
   $("#overlap").innerHTML = CFG.overlapOpts.map(([v, l]) => `<option value="${v}"${v === S.overlap ? " selected" : ""}>${l}</option>`).join("");
   $("#fcK").innerHTML = CFG.fcK.map(([v, l]) => `<option value="${v}"${v === CFG.fcKdef ? " selected" : ""}>${l}</option>`).join("");
   $("#fcTrevoBox").hidden = !isMM();
