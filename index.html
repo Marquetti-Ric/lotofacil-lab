@@ -15749,9 +15749,26 @@ function initFcGrid() {
     paintFc();
   }, paintFc);
 }
-$("#fcSug").onclick = () => { S.fc = new Set(C.shuffle([...C.ALL]).slice(0, CFG.fcSug)); paintFc(); };
+// Lotofácil: as dezenas que NÃO saíram no último sorteio + as mais frequentes (janela da aba Estatísticas) para completar.
+// Demais loterias: sugestão ao acaso.
+function sugestaoLotofacil() {
+  const ult = last(); if (!ult) return null;
+  const saiu = new Set(ult.dezenas);
+  const fora = C.ALL.filter((n) => !saiu.has(n));
+  const st = C.stats(S.win ? S.results.slice(0, S.win) : S.results);
+  const porFreq = (a, b) => st.freq[b] - st.freq[a] || st.atraso[a] - st.atraso[b] || a - b;
+  const base = fora.length > CFG.fcSug ? fora.slice().sort(porFreq).slice(0, CFG.fcSug) : fora;
+  const completar = C.ALL.filter((n) => !base.includes(n)).sort(porFreq).slice(0, CFG.fcSug - base.length);
+  return { nums: [...base, ...completar], fora: base.length, mais: completar, concurso: ult.concurso, janela: st.n };
+}
+$("#fcSug").onclick = () => {
+  const sg = GID === "lf" ? sugestaoLotofacil() : null;
+  if (!sg) { S.fc = new Set(C.shuffle([...C.ALL]).slice(0, CFG.fcSug)); paintFc(); return; }
+  S.fc = new Set(sg.nums); paintFc();
+  toast(`${sg.fora} que não saíram no concurso ${sg.concurso} + ${sg.mais.length} mais frequentes dos últimos ${sg.janela} (${sg.mais.map((n) => String(n).padStart(2, "0")).join(", ")})`);
+};
 $("#fcStats").onclick = () => {
-  const st = C.stats(S.results.slice(0, S.win));
+  const st = C.stats(S.win ? S.results.slice(0, S.win) : S.results);
   const top = C.ALL.slice().sort((a, b) => st.freq[b] - st.freq[a] || a - b).slice(0, CFG.fcSug);
   S.fc = new Set(top); paintFc();
   toast(`${CFG.fcSug} mais frequentes dos últimos ${st.n} concursos`);
