@@ -306,7 +306,9 @@ body[data-game="tm"] .cell.fix::after { padding: 2px 3px; font-size: 8px; }
       <div class="seg" id="modeSeg">
         <button type="button" data-mode="filtros" aria-pressed="true">Com filtros</button>
         <button type="button" data-mode="puro" aria-pressed="false">Surpresinha pura</button>
+        <button type="button" data-mode="antipop" aria-pressed="false" id="modeAntipop" hidden>Fugir do popular</button>
       </div>
+      <p class="small muted" id="antipopNote" hidden>Dezenas ao acaso, descartando os desenhos que muita gente marca: sequência de 8 ou mais, duas linhas ou colunas inteiras do volante, 12 ou mais repetidas do último concurso, um resultado que já saiu e jogos quase só de ímpares ou de pares. A chance de acertar é a mesma; se vierem 14 ou 15 pontos, você tende a dividir o prêmio com menos gente.</p>
       <details id="filtersBox" open>
         <summary>Filtros de perfil</summary>
         <div id="filters"></div>
@@ -622,8 +624,26 @@ const LF = (() => {
     return c;
   }
 
+  /* ---------- Fugir do popular ----------
+     Padrões que muita gente marca: sequência longa, linha ou coluna inteira do volante, copiar o último resultado,
+     repetir um resultado que já saiu. Não muda a chance de acertar; só reduz a chance de dividir o prêmio de 14 e 15. */
+  let PASSADOS = new Set();
+  function setPassados(results) { if (PASSADOS.size !== results.length) PASSADOS = new Set(results.map((r) => r.dezenas.join(","))); }
+  const LINHAS = [0, 1, 2, 3, 4].map((r) => [1, 2, 3, 4, 5].map((c) => r * 5 + c));
+  const COLUNAS = [1, 2, 3, 4, 5].map((c) => [0, 1, 2, 3, 4].map((r) => r * 5 + c));
+  function popular(t, last) {
+    const s = new Set(t), motivos = [];
+    const m = metrics(t, last);
+    if (m.sequencia >= 8) motivos.push("sequência longa");
+    if ([...LINHAS, ...COLUNAS].filter((g) => g.every((n) => s.has(n))).length >= 2) motivos.push("linhas ou colunas inteiras");
+    if (m.repetidas !== null && m.repetidas >= 12) motivos.push("cópia do último resultado");
+    if (PASSADOS.has([...t].sort((a, b) => a - b).join(","))) motivos.push("resultado que já saiu");
+    if (m.impares >= 12 || m.impares <= 3) motivos.push("quase só ímpares ou pares");
+    return motivos;
+  }
+
   /* ---------- Gerador por orçamento ---------- */
-  function generateBudget({ count, filters = [], fixed = [], excluded = [], last = null, maxOverlap = 11, existing = [], weights = null }) {
+  function generateBudget({ count, filters = [], fixed = [], excluded = [], last = null, maxOverlap = 11, existing = [], weights = null, antiPop = false }) {
     const fixedSet = new Set(fixed);
     const pool = ALL.filter((n) => !fixedSet.has(n) && !excluded.includes(n));
     const need = 15 - fixed.length;
@@ -639,6 +659,7 @@ const LF = (() => {
       const key = t.join(",");
       if (keys.has(key)) continue;
       if (!passes(metrics(t, last), filters)) { filterMiss++; continue; }
+      if (antiPop && popular(t, last).length) { filterMiss++; continue; }
       if (tickets.some((x) => overlap(x, t) > ov) || existing.some((x) => overlap(x, t) > ov)) {
         if (tries % 4000 === 0 && ov < 14) { ov++; relaxed = true; }
         continue;
@@ -868,27 +889,27 @@ const LF = (() => {
   const MULTI = { mista16: 16, mista17: 17 };
 
   // count = quantas apostas simples o orçamento paga
-  function buildPortfolio(kind, { count, filters = [], fixed = [], excluded = [], last = null, maxOverlap = 11, step = 1, weights = null }) {
+  function buildPortfolio(kind, { count, filters = [], fixed = [], excluded = [], last = null, maxOverlap = 11, step = 1, weights = null, antiPop = false }) {
     if (MULTI[kind]) {
       const size = MULTI[kind], inside = comb(size, 15);
       if (count < inside) throw new Error(`Uma aposta de ${size} dezenas custa ${inside} apostas simples. Aumente o valor.`);
       const big = pickSet(size, fixed.slice(0, size), excluded, weights);
       const bigTickets = expand(big);
       const rest = count - inside;
-      const extra = rest ? generateBudget({ count: rest, filters, fixed, excluded, last, maxOverlap, existing: bigTickets, weights }) : { tickets: [], complete: true, relaxed: false, maxOverlapUsed: maxOverlap };
+      const extra = rest ? generateBudget({ count: rest, filters, fixed, excluded, last, maxOverlap, existing: bigTickets, weights, antiPop }) : { tickets: [], complete: true, relaxed: false, maxOverlapUsed: maxOverlap };
       return { kind, bets: [big, ...extra.tickets], tickets: [...bigTickets, ...extra.tickets], complete: extra.complete, relaxed: extra.relaxed, maxOverlapUsed: extra.maxOverlapUsed };
     }
     if (kind === "deslocamento") {
       const tickets = [];
       while (tickets.length < count) {
-        const base = generateBudget({ count: 1, filters, fixed: [], excluded, last, weights }).tickets[0] || pickSet(15);
+        const base = generateBudget({ count: 1, filters, fixed: [], excluded, last, weights, antiPop }).tickets[0] || pickSet(15);
         shiftTickets(base, Math.min(25, count - tickets.length), step).forEach((t) => {
           if (!tickets.some((x) => x.join() === t.join())) tickets.push(t);
         });
       }
       return { kind, bets: tickets.slice(0, count), tickets: tickets.slice(0, count), complete: true, relaxed: false, maxOverlapUsed: 14 };
     }
-    const r = generateBudget({ count, filters, fixed, excluded, last, maxOverlap, weights });
+    const r = generateBudget({ count, filters, fixed, excluded, last, maxOverlap, weights, antiPop });
     return { kind, bets: r.tickets, tickets: r.tickets, complete: r.complete, relaxed: r.relaxed, maxOverlapUsed: r.maxOverlapUsed };
   }
 
@@ -1052,7 +1073,7 @@ const LF = (() => {
     });
   }
 
-  return { LOGICS18, backtest18, MEDIA18, SD18, wpick, PREFS, prefWeights, LOGICS, backtest, expand, pickSet, shiftTickets, STRATEGIES, MULTI, buildPortfolio, portfolioMetrics, ALL, PRIMOS, MOLDURA, TOTAL_COMB, comb, probHits, metrics, FILTER_DEFS, passes, overlap, generateBudget,
+  return { popular, setPassados, LOGICS18, backtest18, MEDIA18, SD18, wpick, PREFS, prefWeights, LOGICS, backtest, expand, pickSet, shiftTickets, STRATEGIES, MULTI, buildPortfolio, portfolioMetrics, ALL, PRIMOS, MOLDURA, TOTAL_COMB, comb, probHits, metrics, FILTER_DEFS, passes, overlap, generateBudget,
     fechamento, fechamentoCost, verifyFechamento, stats, filterCoverage, hits, parseRows, parseText, shuffle };
 })();
 if (typeof module !== "undefined") module.exports = LF;
@@ -15507,6 +15528,7 @@ $("#modeSeg").addEventListener("click", (e) => {
   S.mode = b.dataset.mode;
   $("#modeSeg").querySelectorAll("button").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
   $("#filtersBox").hidden = S.mode !== "filtros";
+  $("#antipopNote").hidden = S.mode !== "antipop";
 });
 
 function renderFilters() {
@@ -15549,11 +15571,13 @@ function runGenerate(count, opts = {}) {
   const fixed = [], excluded = [];
   for (let n = 1; n <= CFG.N; n++) { if (S.fixState[n] === 1) fixed.push(n); if (S.fixState[n] === 2) excluded.push(n); }
   const filters = (opts.mode || S.mode) === "filtros" ? S.filters : [];
+  const antiPop = CFG.id === "lf" && (opts.mode || S.mode) === "antipop";
+  if (antiPop) C.setPassados(S.results);
   const pref = opts.pref || S.pref;
   const weights = C.prefWeights(S.results, pref, opts.prefWin || S.prefWin);
   return C.buildPortfolio(opts.strategy || S.strategy, {
     weights, count, filters, fixed: opts.fixed || fixed, excluded: opts.excluded || excluded,
-    last: last() ? last().dezenas : null, maxOverlap: opts.maxOverlap || +$("#overlap").value,
+    last: last() ? last().dezenas : null, maxOverlap: opts.maxOverlap || +$("#overlap").value, antiPop,
   });
 }
 function metricsFor(tickets) {
@@ -15585,7 +15609,7 @@ function renderGenOut(res, cost) {
   if (res.relaxed) msgs.push(`<div class="note">Para caber tudo, alguns jogos chegam a ter ${res.maxOverlapUsed} dezenas iguais entre si.</div>`);
   out.innerHTML = `
     <div class="row between"><h2>${res.bets.length} ${res.bets.length === 1 ? "aposta" : "apostas"} · ${brl(cost)}</h2><span class="pill">para o concurso ${nextConcurso() ?? "?"}</span></div>
-    <p class="small muted">${C.STRATEGIES[res.kind].nome}${S.pref !== "neutra" ? " · preferência: " + C.PREFS[S.pref].toLowerCase() : ""}</p>
+    <p class="small muted">${C.STRATEGIES[res.kind].nome}${S.mode === "antipop" && CFG.id === "lf" ? " · ao acaso, fugindo do popular" : ""}${S.pref !== "neutra" ? " · preferência: " + C.PREFS[S.pref].toLowerCase() : ""}</p>
     ${msgs.join("")}
     ${oddsHTML(m)}
     ${betsHTML(res.bets)}
@@ -16573,8 +16597,11 @@ function applyGame() {
   if (isMM()) $("#fcTrevo").innerHTML = `<option value="">Variar os pares (rodízio)</option>` + C.PAIRS.map((pr) => `<option value="${pr.join(",")}">Trevos ${pr[0]} e ${pr[1]}</option>`).join("");
   $("#pref").innerHTML = Object.entries(C.PREFS).map(([k, v]) => `<option value="${k}">${v}</option>`).join("");
   $("#pref").value = S.pref; $("#prefWin").value = String(S.prefWin);
+  $("#modeAntipop").hidden = CFG.id !== "lf";
+  if (S.mode === "antipop" && CFG.id !== "lf") S.mode = "puro";
   $("#modeSeg").querySelectorAll("button").forEach((x) => x.setAttribute("aria-pressed", String(x.dataset.mode === S.mode)));
   $("#filtersBox").hidden = S.mode !== "filtros";
+  $("#antipopNote").hidden = S.mode !== "antipop";
   $("#budget").value = S.budget;
   ["#genOut", "#cmpOut", "#fcOut"].forEach((q) => { $(q).hidden = true; $(q).innerHTML = ""; });
   $("#btOut").innerHTML = "";
