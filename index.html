@@ -306,9 +306,7 @@ body[data-game="tm"] .cell.fix::after { padding: 2px 3px; font-size: 8px; }
       <div class="seg" id="modeSeg">
         <button type="button" data-mode="filtros" aria-pressed="true">Com filtros</button>
         <button type="button" data-mode="puro" aria-pressed="false">Surpresinha pura</button>
-        <button type="button" data-mode="antipop" aria-pressed="false" id="modeAntipop" hidden>Fugir do popular</button>
       </div>
-      <p class="small muted" id="antipopNote" hidden>Dezenas ao acaso, descartando os desenhos que muita gente marca: sequência de 8 ou mais, duas linhas ou colunas inteiras do volante, 12 ou mais repetidas do último concurso, um resultado que já saiu e jogos quase só de ímpares ou de pares. A chance de acertar é a mesma; se vierem 14 ou 15 pontos, você tende a dividir o prêmio com menos gente.</p>
       <details id="filtersBox" open>
         <summary>Filtros de perfil</summary>
         <div id="filters"></div>
@@ -394,12 +392,8 @@ body[data-game="tm"] .cell.fix::after { padding: 2px 3px; font-size: 8px; }
     <div class="card" id="btCard">
       <div class="row between"><h2>Testar estratégia</h2><span class="pill" id="btCount"></span></div>
       <p class="small">Para cada concurso do histórico, o app monta um jogo com cada lógica olhando só os concursos anteriores, e confere com o resultado que saiu. É o teste de "se eu tivesse jogado assim desde sempre".</p>
-      <div class="field" id="btTipoBox" hidden>
-        <label class="label" for="btTipo">O que testar</label>
-        <select id="btTipo"><option value="15">1 jogo de 15 dezenas</option><option value="18">18 dezenas para fechamento</option></select>
-      </div>
       <div class="row">
-        <div class="field" style="flex:1"><label class="label" for="btWin">Olhar os últimos</label><select id="btWin"><option value="10">10 concursos</option><option value="20" selected>20 concursos</option><option value="30">30 concursos</option><option value="50">50 concursos</option><option value="100">100 concursos</option></select></div>
+        <div class="field" style="flex:1"><label class="label" for="btWin">Olhar os últimos</label><select id="btWin"><option value="10">10 concursos</option><option value="20" selected>20 concursos</option><option value="50">50 concursos</option><option value="100">100 concursos</option></select></div>
         <div class="field" style="flex:1"><label class="label" for="btLimit">Testar em</label><select id="btLimit"><option value="0" selected>todo o histórico</option><option value="1000">últimos 1.000</option><option value="200">últimos 200</option></select></div>
       </div>
       <button class="btn" type="button" id="btRun">Rodar teste</button>
@@ -624,26 +618,8 @@ const LF = (() => {
     return c;
   }
 
-  /* ---------- Fugir do popular ----------
-     Padrões que muita gente marca: sequência longa, linha ou coluna inteira do volante, copiar o último resultado,
-     repetir um resultado que já saiu. Não muda a chance de acertar; só reduz a chance de dividir o prêmio de 14 e 15. */
-  let PASSADOS = new Set();
-  function setPassados(results) { if (PASSADOS.size !== results.length) PASSADOS = new Set(results.map((r) => r.dezenas.join(","))); }
-  const LINHAS = [0, 1, 2, 3, 4].map((r) => [1, 2, 3, 4, 5].map((c) => r * 5 + c));
-  const COLUNAS = [1, 2, 3, 4, 5].map((c) => [0, 1, 2, 3, 4].map((r) => r * 5 + c));
-  function popular(t, last) {
-    const s = new Set(t), motivos = [];
-    const m = metrics(t, last);
-    if (m.sequencia >= 8) motivos.push("sequência longa");
-    if ([...LINHAS, ...COLUNAS].filter((g) => g.every((n) => s.has(n))).length >= 2) motivos.push("linhas ou colunas inteiras");
-    if (m.repetidas !== null && m.repetidas >= 12) motivos.push("cópia do último resultado");
-    if (PASSADOS.has([...t].sort((a, b) => a - b).join(","))) motivos.push("resultado que já saiu");
-    if (m.impares >= 12 || m.impares <= 3) motivos.push("quase só ímpares ou pares");
-    return motivos;
-  }
-
   /* ---------- Gerador por orçamento ---------- */
-  function generateBudget({ count, filters = [], fixed = [], excluded = [], last = null, maxOverlap = 11, existing = [], weights = null, antiPop = false }) {
+  function generateBudget({ count, filters = [], fixed = [], excluded = [], last = null, maxOverlap = 11, existing = [], weights = null }) {
     const fixedSet = new Set(fixed);
     const pool = ALL.filter((n) => !fixedSet.has(n) && !excluded.includes(n));
     const need = 15 - fixed.length;
@@ -659,7 +635,6 @@ const LF = (() => {
       const key = t.join(",");
       if (keys.has(key)) continue;
       if (!passes(metrics(t, last), filters)) { filterMiss++; continue; }
-      if (antiPop && popular(t, last).length) { filterMiss++; continue; }
       if (tickets.some((x) => overlap(x, t) > ov) || existing.some((x) => overlap(x, t) > ov)) {
         if (tries % 4000 === 0 && ov < 14) { ov++; relaxed = true; }
         continue;
@@ -889,27 +864,27 @@ const LF = (() => {
   const MULTI = { mista16: 16, mista17: 17 };
 
   // count = quantas apostas simples o orçamento paga
-  function buildPortfolio(kind, { count, filters = [], fixed = [], excluded = [], last = null, maxOverlap = 11, step = 1, weights = null, antiPop = false }) {
+  function buildPortfolio(kind, { count, filters = [], fixed = [], excluded = [], last = null, maxOverlap = 11, step = 1, weights = null }) {
     if (MULTI[kind]) {
       const size = MULTI[kind], inside = comb(size, 15);
       if (count < inside) throw new Error(`Uma aposta de ${size} dezenas custa ${inside} apostas simples. Aumente o valor.`);
       const big = pickSet(size, fixed.slice(0, size), excluded, weights);
       const bigTickets = expand(big);
       const rest = count - inside;
-      const extra = rest ? generateBudget({ count: rest, filters, fixed, excluded, last, maxOverlap, existing: bigTickets, weights, antiPop }) : { tickets: [], complete: true, relaxed: false, maxOverlapUsed: maxOverlap };
+      const extra = rest ? generateBudget({ count: rest, filters, fixed, excluded, last, maxOverlap, existing: bigTickets, weights }) : { tickets: [], complete: true, relaxed: false, maxOverlapUsed: maxOverlap };
       return { kind, bets: [big, ...extra.tickets], tickets: [...bigTickets, ...extra.tickets], complete: extra.complete, relaxed: extra.relaxed, maxOverlapUsed: extra.maxOverlapUsed };
     }
     if (kind === "deslocamento") {
       const tickets = [];
       while (tickets.length < count) {
-        const base = generateBudget({ count: 1, filters, fixed: [], excluded, last, weights, antiPop }).tickets[0] || pickSet(15);
+        const base = generateBudget({ count: 1, filters, fixed: [], excluded, last, weights }).tickets[0] || pickSet(15);
         shiftTickets(base, Math.min(25, count - tickets.length), step).forEach((t) => {
           if (!tickets.some((x) => x.join() === t.join())) tickets.push(t);
         });
       }
       return { kind, bets: tickets.slice(0, count), tickets: tickets.slice(0, count), complete: true, relaxed: false, maxOverlapUsed: 14 };
     }
-    const r = generateBudget({ count, filters, fixed, excluded, last, maxOverlap, weights, antiPop });
+    const r = generateBudget({ count, filters, fixed, excluded, last, maxOverlap, weights });
     return { kind, bets: r.tickets, tickets: r.tickets, complete: r.complete, relaxed: r.relaxed, maxOverlapUsed: r.maxOverlapUsed };
   }
 
@@ -1026,54 +1001,7 @@ const LF = (() => {
     });
   }
 
-  /* ---------- Teste de estratégias de 18 dezenas (para fechamento) ---------- */
-  const LOGICS18 = {
-    fora_quentes: "10 que não saíram no último + 8 mais quentes",
-    ultimo_quentes: "15 do último + 3 mais quentes",
-    ultimo_frias: "15 do último + 3 mais frias",
-    quentes: "18 mais quentes",
-    frias: "18 mais frias",
-    atrasadas: "18 mais atrasadas",
-    aleatorio: "18 ao acaso",
-  };
-  // Ao acaso: das 15 sorteadas, quantas caem dentro de 18 escolhidas (hipergeométrica)
-  const P18 = (x) => (comb(15, x) * comb(10, 18 - x)) / comb(25, 18);
-  const MEDIA18 = (15 * 18) / 25, SD18 = Math.sqrt(15 * (18 / 25) * (7 / 25) * (10 / 24));
-  function pick18(k, hist, st) {
-    const ult = new Set(hist[0].dezenas);
-    const quente = (a, b) => st.freq[b] - st.freq[a] || st.atraso[a] - st.atraso[b] || a - b;
-    const fria = (a, b) => st.freq[a] - st.freq[b] || st.atraso[b] - st.atraso[a] || a - b;
-    if (k === "aleatorio") return shuffle([...ALL]).slice(0, 18);
-    if (k === "fora_quentes") { const fora = ALL.filter((n) => !ult.has(n)); return [...fora, ...ALL.filter((n) => ult.has(n)).sort(quente).slice(0, 18 - fora.length)]; }
-    if (k === "ultimo_quentes") return [...ult, ...ALL.filter((n) => !ult.has(n)).sort(quente).slice(0, 3)];
-    if (k === "ultimo_frias") return [...ult, ...ALL.filter((n) => !ult.has(n)).sort(fria).slice(0, 3)];
-    const sc = scoreFor(k, st);
-    return ALL.slice().sort((a, b) => sc(b) - sc(a) || a - b).slice(0, 18);
-  }
-  // Para cada concurso: monta as 18 só com os concursos anteriores e conta quantas das 15 sorteadas ficaram dentro.
-  function backtest18(results, { window = 30, limit = 0, logics = Object.keys(LOGICS18) } = {}) {
-    const out = {};
-    logics.forEach((k) => { out[k] = { k, nome: LOGICS18[k], n: 0, soma: 0, dentro: { 13: 0, 14: 0, 15: 0 } }; });
-    const lastIdx = results.length - 1 - window;
-    const first = limit ? Math.max(0, lastIdx - limit + 1) : 0;
-    for (let i = lastIdx; i >= first; i--) {
-      const draw = new Set(results[i].dezenas);
-      const hist = results.slice(i + 1, i + 1 + window);
-      const st = stats(hist);
-      for (const k of logics) {
-        let h = 0; for (const n of pick18(k, hist, st)) if (draw.has(n)) h++;
-        const o = out[k]; o.n++; o.soma += h; if (h >= 13) o.dentro[h]++;
-      }
-    }
-    const p13 = P18(13) + P18(14) + P18(15), p15 = P18(15);
-    return Object.values(out).map((o) => {
-      const media = o.soma / o.n;
-      return { ...o, media, z: (media - MEDIA18) / (SD18 / Math.sqrt(o.n)), v13: o.dentro[13] + o.dentro[14] + o.dentro[15], v15: o.dentro[15],
-        esp13: o.n * p13, esp15: o.n * p15 };
-    });
-  }
-
-  return { popular, setPassados, LOGICS18, backtest18, MEDIA18, SD18, wpick, PREFS, prefWeights, LOGICS, backtest, expand, pickSet, shiftTickets, STRATEGIES, MULTI, buildPortfolio, portfolioMetrics, ALL, PRIMOS, MOLDURA, TOTAL_COMB, comb, probHits, metrics, FILTER_DEFS, passes, overlap, generateBudget,
+  return { wpick, PREFS, prefWeights, LOGICS, backtest, expand, pickSet, shiftTickets, STRATEGIES, MULTI, buildPortfolio, portfolioMetrics, ALL, PRIMOS, MOLDURA, TOTAL_COMB, comb, probHits, metrics, FILTER_DEFS, passes, overlap, generateBudget,
     fechamento, fechamentoCost, verifyFechamento, stats, filterCoverage, hits, parseRows, parseText, shuffle };
 })();
 if (typeof module !== "undefined") module.exports = LF;
@@ -15528,7 +15456,6 @@ $("#modeSeg").addEventListener("click", (e) => {
   S.mode = b.dataset.mode;
   $("#modeSeg").querySelectorAll("button").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
   $("#filtersBox").hidden = S.mode !== "filtros";
-  $("#antipopNote").hidden = S.mode !== "antipop";
 });
 
 function renderFilters() {
@@ -15571,13 +15498,11 @@ function runGenerate(count, opts = {}) {
   const fixed = [], excluded = [];
   for (let n = 1; n <= CFG.N; n++) { if (S.fixState[n] === 1) fixed.push(n); if (S.fixState[n] === 2) excluded.push(n); }
   const filters = (opts.mode || S.mode) === "filtros" ? S.filters : [];
-  const antiPop = CFG.id === "lf" && (opts.mode || S.mode) === "antipop";
-  if (antiPop) C.setPassados(S.results);
   const pref = opts.pref || S.pref;
   const weights = C.prefWeights(S.results, pref, opts.prefWin || S.prefWin);
   return C.buildPortfolio(opts.strategy || S.strategy, {
     weights, count, filters, fixed: opts.fixed || fixed, excluded: opts.excluded || excluded,
-    last: last() ? last().dezenas : null, maxOverlap: opts.maxOverlap || +$("#overlap").value, antiPop,
+    last: last() ? last().dezenas : null, maxOverlap: opts.maxOverlap || +$("#overlap").value,
   });
 }
 function metricsFor(tickets) {
@@ -15609,7 +15534,7 @@ function renderGenOut(res, cost) {
   if (res.relaxed) msgs.push(`<div class="note">Para caber tudo, alguns jogos chegam a ter ${res.maxOverlapUsed} dezenas iguais entre si.</div>`);
   out.innerHTML = `
     <div class="row between"><h2>${res.bets.length} ${res.bets.length === 1 ? "aposta" : "apostas"} · ${brl(cost)}</h2><span class="pill">para o concurso ${nextConcurso() ?? "?"}</span></div>
-    <p class="small muted">${C.STRATEGIES[res.kind].nome}${S.mode === "antipop" && CFG.id === "lf" ? " · ao acaso, fugindo do popular" : ""}${S.pref !== "neutra" ? " · preferência: " + C.PREFS[S.pref].toLowerCase() : ""}</p>
+    <p class="small muted">${C.STRATEGIES[res.kind].nome}${S.pref !== "neutra" ? " · preferência: " + C.PREFS[S.pref].toLowerCase() : ""}</p>
     ${msgs.join("")}
     ${oddsHTML(m)}
     ${betsHTML(res.bets)}
@@ -15710,32 +15635,13 @@ function renderBacktest(rows) {
     <p class="small">${CFG.btNote(n, fmt)}</p>
   </div>`;
 }
-// 18 dezenas: conta quantas das 15 sorteadas caíram dentro das 18. O fechamento só garante o prêmio quando as 15 estão dentro.
-function renderBacktest18(rows) {
-  const n = rows[0].n;
-  const fmt = (v, d = 2) => v.toLocaleString("pt-BR", { minimumFractionDigits: d, maximumFractionDigits: d });
-  const pct = (v) => fmt((v / n) * 100, 1) + "%";
-  rows.sort((a, b) => b.media - a.media);
-  $("#btOut").innerHTML = `<div class="cmp" style="margin-top:6px">
-    ${rows.map((r) => `<div class="cmprow">
-      <div class="row between"><b>${r.nome}</b>${verdict(r.z)}</div>
-      <div class="cmpnums">
-        <div><b>${fmt(r.media)}</b><span>das 15 dentro das 18 (acaso ${fmt(C.MEDIA18)})</span></div>
-        <div><b>${pct(r.v13)}</b><span>13 ou mais dentro (acaso ${pct(r.esp13)})</span></div>
-        <div><b>${intBR(r.v15)}</b><span>vezes com as 15 dentro (esperado ${fmt(r.esp15, 1)})</span></div>
-      </div>
-    </div>`).join("")}
-    <p class="small">Em ${intBR(n)} concursos, diferenças até cerca de ${fmt(2 * C.SD18 / Math.sqrt(n))} na média são variação normal. “Acima do acaso” só valeria atenção se aparecesse sempre, em qualquer janela e período. A garantia do fechamento só vale nos concursos em que as 15 sorteadas caem dentro das 18.</p>
-  </div>`;
-}
 $("#btRun").addEventListener("click", () => {
   const b = $("#btRun");
   b.disabled = true; b.innerHTML = `<span class="spinner"></span> Testando…`;
   setTimeout(() => {
     try {
       if (S.results.length < 30) throw new Error("Carregue mais resultados para testar.");
-      if (CFG.id === "lf" && $("#btTipo").value === "18") renderBacktest18(C.backtest18(S.results, { window: +$("#btWin").value, limit: +$("#btLimit").value }));
-      else renderBacktest(runBacktest(+$("#btWin").value, +$("#btLimit").value));
+      renderBacktest(runBacktest(+$("#btWin").value, +$("#btLimit").value));
     } catch (e) { toast(e.message); }
     b.disabled = false; b.textContent = "Rodar teste";
   }, 30);
@@ -15843,26 +15749,9 @@ function initFcGrid() {
     paintFc();
   }, paintFc);
 }
-// Lotofácil: as dezenas que NÃO saíram no último sorteio + as mais frequentes (janela da aba Estatísticas) para completar.
-// Demais loterias: sugestão ao acaso.
-function sugestaoLotofacil() {
-  const ult = last(); if (!ult) return null;
-  const saiu = new Set(ult.dezenas);
-  const fora = C.ALL.filter((n) => !saiu.has(n));
-  const st = C.stats(S.win ? S.results.slice(0, S.win) : S.results);
-  const porFreq = (a, b) => st.freq[b] - st.freq[a] || st.atraso[a] - st.atraso[b] || a - b;
-  const base = fora.length > CFG.fcSug ? fora.slice().sort(porFreq).slice(0, CFG.fcSug) : fora;
-  const completar = C.ALL.filter((n) => !base.includes(n)).sort(porFreq).slice(0, CFG.fcSug - base.length);
-  return { nums: [...base, ...completar], fora: base.length, mais: completar, concurso: ult.concurso, janela: st.n };
-}
-$("#fcSug").onclick = () => {
-  const sg = GID === "lf" ? sugestaoLotofacil() : null;
-  if (!sg) { S.fc = new Set(C.shuffle([...C.ALL]).slice(0, CFG.fcSug)); paintFc(); return; }
-  S.fc = new Set(sg.nums); paintFc();
-  toast(`${sg.fora} que não saíram no concurso ${sg.concurso} + ${sg.mais.length} mais frequentes dos últimos ${sg.janela} (${sg.mais.map((n) => String(n).padStart(2, "0")).join(", ")})`);
-};
+$("#fcSug").onclick = () => { S.fc = new Set(C.shuffle([...C.ALL]).slice(0, CFG.fcSug)); paintFc(); };
 $("#fcStats").onclick = () => {
-  const st = C.stats(S.win ? S.results.slice(0, S.win) : S.results);
+  const st = C.stats(S.results.slice(0, S.win));
   const top = C.ALL.slice().sort((a, b) => st.freq[b] - st.freq[a] || a - b).slice(0, CFG.fcSug);
   S.fc = new Set(top); paintFc();
   toast(`${CFG.fcSug} mais frequentes dos últimos ${st.n} concursos`);
@@ -16584,7 +16473,6 @@ function applyGame() {
   $("#importFmt").textContent = CFG.importFmt;
   $("#chancesText").textContent = CFG.chancesText;
   $("#fcSug").textContent = `Sugerir ${CFG.fcSug}`;
-  $("#btTipoBox").hidden = CFG.id !== "lf"; $("#btOut").innerHTML = "";
   $("#overlap").innerHTML = CFG.overlapOpts.map(([v, l]) => `<option value="${v}"${v === S.overlap ? " selected" : ""}>${l}</option>`).join("");
   $("#fcK").innerHTML = CFG.fcK.map(([v, l]) => `<option value="${v}"${v === CFG.fcKdef ? " selected" : ""}>${l}</option>`).join("");
   $("#fcTrevoBox").hidden = !isMM();
@@ -16597,11 +16485,8 @@ function applyGame() {
   if (isMM()) $("#fcTrevo").innerHTML = `<option value="">Variar os pares (rodízio)</option>` + C.PAIRS.map((pr) => `<option value="${pr.join(",")}">Trevos ${pr[0]} e ${pr[1]}</option>`).join("");
   $("#pref").innerHTML = Object.entries(C.PREFS).map(([k, v]) => `<option value="${k}">${v}</option>`).join("");
   $("#pref").value = S.pref; $("#prefWin").value = String(S.prefWin);
-  $("#modeAntipop").hidden = CFG.id !== "lf";
-  if (S.mode === "antipop" && CFG.id !== "lf") S.mode = "puro";
   $("#modeSeg").querySelectorAll("button").forEach((x) => x.setAttribute("aria-pressed", String(x.dataset.mode === S.mode)));
   $("#filtersBox").hidden = S.mode !== "filtros";
-  $("#antipopNote").hidden = S.mode !== "antipop";
   $("#budget").value = S.budget;
   ["#genOut", "#cmpOut", "#fcOut"].forEach((q) => { $(q).hidden = true; $(q).innerHTML = ""; });
   $("#btOut").innerHTML = "";
