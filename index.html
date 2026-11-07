@@ -15194,7 +15194,7 @@ const GAMES = {
     prizeHits: [11, 12, 13], minHit: 11, bigFrom: 14, hitWord: "pontos", hitShort: "pts",
     overlapOpts: [[10, "10 (jogos bem diferentes)"], [11, "11 (recomendado)"], [12, "12"], [13, "13"], [14, "14 (sem restrição prática)"]], overlapDef: 11,
     chips: [20, 35, 50, 100, 200], budgetDef: 50,
-    fcMin: 16, fcMax: 25, fcSug: 18, fcK: [[15, "15 pontos (todas as combinações, até 20 dezenas)"], [14, "14 pontos"], [13, "13 pontos"], [12, "12 pontos"], [11, "11 pontos"]], fcKdef: 13,
+    fcMin: 16, fcMax: 25, fcSug: 18, fcK: [[15, "15 pontos"], [14, "14 pontos"], [13, "13 pontos"], [12, "12 pontos"], [11, "11 pontos"]], fcKdef: 13,
     chiCrit: 36.4, meanHits: 9, expShare: "60%",
     cmpCols: [["pAny", "algum prêmio"], ["p13", "13+ pontos"], ["p14", "14 ou 15"]], topKey: "p15", topLabel: "15 pontos",
     valueFields: [["price", "Aposta de 15"], ["p11", "Prêmio 11"], ["p12", "Prêmio 12"], ["p13", "Prêmio 13"], ["limit", "Limite por mês"]],
@@ -15883,6 +15883,7 @@ function renderFc(nums, k, r) {
       ${isTM() || isLM() || r.bets ? "" : `<div class="kpi"><b>${brl(r.full * p)}</b><span>custo da aposta múltipla com as ${nums.length} (${intBR(r.full)} jogos)</span></div>`}
     </div>
     ${budget > 0 && cost > budget ? `<div class="note warn">Passa do valor da aba Gerar (${brl(budget)}). Diminua a garantia ou as dezenas.</div>` : ""}
+    ${r.autoT ? `<p class="small">Com mais de 20 dezenas, garantir 15 pontos só cabe em jogos de 20 dezenas, o maior volante da Caixa.</p>` : ""}
     ${r.T ? `<p class="small muted">Equivale a ${intBR(r.simples)} jogos simples de 15. Cada jogo é uma aposta múltipla de ${r.T} dezenas na Caixa.</p>${betsHTML(r.bets)}` : r.bets ? `<div class="note">É a aposta de ${nums.length} dezenas da Caixa: um volante só, que vale ${intBR(r.tickets.length)} jogos de 15. Se as 15 sorteadas estiverem entre as suas ${nums.length}, você faz os 15 pontos, e ainda leva vários prêmios de 14, 13, 12 e 11 no mesmo volante.</div>${betsHTML(r.bets)}`
       : `<div class="tickets">${r.tickets.map((t, i) => `<div class="ticket"><span class="idx">${pad(i + 1)}</span>${ballsHTML(t)}<span></span></div>`).join("")}</div>`}
     <div class="row">
@@ -15900,8 +15901,9 @@ function renderFc(nums, k, r) {
 $("#fcRun").addEventListener("click", async () => {
   if (fcWorker) { fcWorker.terminate(); fcWorker = null; if (fcReject) fcReject(new Error("Cálculo interrompido.")); fcReject = null; return; }
   const nums = [...S.fc].sort((a, b) => a - b), k = +$("#fcK").value;
-  if (CFG.id === "lf" && fcSize() > 15) {
-    const T = fcSize(), N = nums.length, per = LF.comb(T, 15);
+  const autoT = CFG.id === "lf" && k === 15 && fcSize() === 15 && nums.length > 20; // 15 pontos com mais de 20 dezenas: jogos de 20
+  if (CFG.id === "lf" && (fcSize() > 15 || autoT)) {
+    const T = autoT ? 20 : fcSize(), N = nums.length, per = LF.comb(T, 15);
     if (N <= T) {
       const bet = [...nums];
       renderFc(nums, 15, { tickets: [bet], bets: [bet], cost: LF.comb(N, 15) * S.settings.price, simples: LF.comb(N, 15), T: N, full: LF.comb(N, 15), conditionOdds: LF_TOTAL / LF.comb(N, 15), verified: true, worst: 15 });
@@ -15913,7 +15915,7 @@ $("#fcRun").addEventListener("click", async () => {
     $("#fcRun").innerHTML = `<span class="spinner"></span> Calculando…`;
     try {
       const d = await runBigFechamento(nums, k, 15, T);
-      renderFc(nums, k, { tickets: d.tickets, bets: d.tickets, cost: d.tickets.length * per * S.settings.price, simples: d.tickets.length * per, T, full: LF.comb(N, 15), conditionOdds: LF_TOTAL / LF.comb(N, 15), verified: d.ok, worst: d.worst });
+      renderFc(nums, k, { tickets: d.tickets, bets: d.tickets, cost: d.tickets.length * per * S.settings.price, simples: d.tickets.length * per, T, autoT, full: LF.comb(N, 15), conditionOdds: LF_TOTAL / LF.comb(N, 15), verified: d.ok, worst: d.worst });
       $("#fcOut").scrollIntoView({ behavior: "smooth", block: "start" });
     } catch (e) { toast(e.message); }
     $("#fcRun").textContent = "Calcular fechamento"; paintFc();
@@ -15921,7 +15923,6 @@ $("#fcRun").addEventListener("click", async () => {
   }
   if (CFG.id === "lf" && k === 15) {
     const N = nums.length;
-    if (N > 20) { toast(`Garantia de 15 pontos vai até 20 dezenas. Com ${N} seriam ${intBR(LF.comb(N, 15))} jogos.`); return; }
     const bet = [...nums];
     renderFc(nums, 15, { tickets: LF.expand(bet), bets: [bet], full: LF.comb(N, 15), conditionOdds: LF_TOTAL / LF.comb(N, 15), verified: true, worst: 15 });
     $("#fcOut").scrollIntoView({ behavior: "smooth", block: "start" });
