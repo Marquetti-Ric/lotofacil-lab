@@ -867,11 +867,62 @@ const LF = (() => {
     mista16: { nome: "1 aposta de 16 + apostas de 15", desc: "Uma aposta de 16 dezenas (vale 16 apostas) e o restante em jogos de 15 espalhados." },
     mista17: { nome: "1 aposta de 17 + apostas de 15", desc: "Uma aposta de 17 dezenas (vale 136 apostas) e o restante em jogos de 15." },
     deslocamento: { nome: "Deslocamento", desc: "Um jogo base e cópias dele andando uma casa para frente a cada jogo." },
+    padrao: { nome: "Padrão 50", desc: "Nota para cada dezena pelo estado dela (saindo ou ausente há quantos concursos), aprendida nos últimos 50; cada jogo repete 9 do último. No histórico, empata com o acaso." },
   };
+
+  /* ---------- Padrão 50: estado de cada dezena e quanto cada estado costuma sair no concurso seguinte ---------- */
+  // draws: do mais antigo para o mais novo (Sets). Estado após o concurso i: "s3" = saindo há 3 seguidos, "a2" = ausente há 2.
+  function padState(draws, i, n) {
+    const s = draws[i].has(n); let k = 0;
+    while (i >= 0 && draws[i].has(n) === s && k < 6) { k++; i--; }
+    return (s ? "s" : "a") + k;
+  }
+  // results: mais recente primeiro. Devolve a nota (probabilidade aprendida) de cada dezena para o próximo concurso.
+  function padraoScores(results, W = 50) {
+    const draws = results.slice(0, W + 6).map((r) => new Set(r.dezenas)).reverse();
+    const num = {}, den = {};
+    for (let i = 6; i < draws.length; i++) for (let n = 1; n <= 25; n++) { const st = padState(draws, i - 1, n); den[st] = (den[st] || 0) + 1; num[st] = (num[st] || 0) + (draws[i].has(n) ? 1 : 0); }
+    const P = {}; for (const st in den) P[st] = (num[st] + 6) / (den[st] + 10); // suavizado na direção de 60%
+    const sc = Array(26).fill(0.6), states = Array(26).fill("");
+    const li = draws.length - 1;
+    for (let n = 1; n <= 25; n++) { states[n] = padState(draws, li, n); sc[n] = P[states[n]] ?? 0.6; }
+    return { sc, states, P, last: draws[li] };
+  }
+  function padraoTicket(info, { fixed = [], excluded = [], random = true } = {}) {
+    const { sc, last } = info, fx = new Set(fixed), ex = new Set(excluded);
+    const w = Array(26).fill(1); for (let n = 1; n <= 25; n++) w[n] = Math.pow(sc[n], 8);
+    const rep = ALL.filter((n) => last.has(n) && !fx.has(n) && !ex.has(n));
+    const nov = ALL.filter((n) => !last.has(n) && !fx.has(n) && !ex.has(n));
+    const fxRep = fixed.filter((n) => last.has(n)).length, fxNov = fixed.length - fxRep;
+    let needRep = Math.max(0, 9 - fxRep), needNov = Math.max(0, 6 - fxNov);
+    if (needRep > rep.length) { needNov += needRep - rep.length; needRep = rep.length; }
+    if (needNov > nov.length) { needRep += needNov - nov.length; needNov = nov.length; }
+    const top = (pool, k) => (random ? wpick(pool, k, w) : pool.slice().sort((a, b) => sc[b] - sc[a] || a - b).slice(0, k));
+    return [...fixed, ...top(rep, needRep), ...top(nov, needNov)].slice(0, 15).sort((a, b) => a - b);
+  }
+  function padraoPortfolio(results, { count, filters = [], fixed = [], excluded = [], maxOverlap = 11 }) {
+    if (!results || results.length < 20) throw new Error("O Padrão 50 precisa do histórico de resultados carregado.");
+    const info = padraoScores(results);
+    const tickets = [], keys = new Set();
+    let ov = maxOverlap, tries = 0, relaxed = false;
+    const first = padraoTicket(info, { fixed, excluded, random: false });
+    tickets.push(first); keys.add(first.join(","));
+    while (tickets.length < count && tries < 60000) {
+      tries++;
+      const t = padraoTicket(info, { fixed, excluded });
+      const key = t.join(",");
+      if (keys.has(key)) continue;
+      if (filters.length && !passes(metrics(t, [...info.last]), filters) && tries < 30000) continue;
+      if (tickets.some((x) => overlap(x, t) > ov)) { if (tries % 1500 === 0 && ov < 14) { ov++; relaxed = true; } continue; }
+      keys.add(key); tickets.push(t);
+    }
+    return { kind: "padrao", bets: tickets, tickets, complete: tickets.length === count, relaxed, maxOverlapUsed: ov, info };
+  }
   const MULTI = { mista16: 16, mista17: 17 };
 
   // count = quantas apostas simples o orçamento paga
-  function buildPortfolio(kind, { count, filters = [], fixed = [], excluded = [], last = null, maxOverlap = 11, step = 1, weights = null }) {
+  function buildPortfolio(kind, { count, filters = [], fixed = [], excluded = [], last = null, maxOverlap = 11, step = 1, weights = null, results = null }) {
+    if (kind === "padrao") return padraoPortfolio(results, { count, filters, fixed, excluded, maxOverlap });
     if (MULTI[kind]) {
       const size = MULTI[kind], inside = comb(size, 15);
       if (count < inside) throw new Error(`Uma aposta de ${size} dezenas custa ${inside} apostas simples. Aumente o valor.`);
@@ -972,6 +1023,7 @@ const LF = (() => {
     ultimo: "Repetir o último resultado",
     filtros: "Gerador com filtros de perfil",
     aleatorio: "Jogo aleatório",
+    padrao: "Padrão 50 (estado de cada dezena)",
   };
   // results: mais recente primeiro. Para cada concurso, monta 1 jogo usando só os concursos anteriores.
   function backtest(results, { window = 20, filters = [], prizes = { 11: 7, 12: 14, 13: 35 }, price = 3.5, logics = Object.keys(LOGICS), limit = 0 } = {}) {
@@ -986,7 +1038,8 @@ const LF = (() => {
       const st = stats(hist);
       for (const k of logics) {
         let t;
-        if (k === "ultimo") t = hist[0].dezenas;
+        if (k === "padrao") t = results.length - i - 1 >= 26 ? padraoTicket(padraoScores(results.slice(i + 1)), { random: false }) : shuffle([...ALL]).slice(0, 15);
+        else if (k === "ultimo") t = hist[0].dezenas;
         else if (k === "aleatorio") t = shuffle([...ALL]).slice(0, 15);
         else if (k === "filtros") t = generateBudget({ count: 1, filters, last: hist[0].dezenas }).tickets[0] || shuffle([...ALL]).slice(0, 15);
         else { const sc = scoreFor(k, st); t = ALL.slice().sort((a, b) => sc(b) - sc(a) || Math.random() - 0.5).slice(0, 15); }
@@ -1008,7 +1061,7 @@ const LF = (() => {
     });
   }
 
-  return { wpick, PREFS, prefWeights, LOGICS, backtest, expand, pickSet, shiftTickets, STRATEGIES, MULTI, buildPortfolio, portfolioMetrics, ALL, PRIMOS, MOLDURA, TOTAL_COMB, comb, probHits, metrics, FILTER_DEFS, passes, overlap, generateBudget,
+  return { wpick, PREFS, prefWeights, LOGICS, backtest, expand, pickSet, shiftTickets, STRATEGIES, MULTI, buildPortfolio, padraoScores, padraoTicket, portfolioMetrics, ALL, PRIMOS, MOLDURA, TOTAL_COMB, comb, probHits, metrics, FILTER_DEFS, passes, overlap, generateBudget,
     fechamento, fechamentoCost, verifyFechamento, stats, filterCoverage, hits, parseRows, parseText, shuffle };
 })();
 if (typeof module !== "undefined") module.exports = LF;
@@ -2417,7 +2470,8 @@ if (typeof module !== "undefined") module.exports = LM;
 
 </script>
 <script>
-const SEEDS = { lf: `3823;06/11/2026;03,06,07,08,10,11,15,16,17,18,20,21,22,23,24
+const SEEDS = { lf: `3824;08/11/2026;01,02,03,07,11,12,13,14,15,17,18,19,22,24,25
+3823;06/11/2026;03,06,07,08,10,11,15,16,17,18,20,21,22,23,24
 3822;05/11/2026;01,02,06,07,09,10,12,13,15,17,18,20,21,24,25
 3821;04/11/2026;01,05,06,09,10,12,14,17,18,19,20,21,22,23,25
 3820;03/11/2026;02,03,05,06,11,12,13,14,15,16,21,22,23,24,25
@@ -15521,7 +15575,7 @@ function runGenerate(count, opts = {}) {
   const weights = C.prefWeights(S.results, pref, opts.prefWin || S.prefWin);
   return C.buildPortfolio(opts.strategy || S.strategy, {
     weights, count, filters, fixed: opts.fixed || fixed, excluded: opts.excluded || excluded,
-    last: last() ? last().dezenas : null, maxOverlap: opts.maxOverlap || +$("#overlap").value,
+    last: last() ? last().dezenas : null, maxOverlap: opts.maxOverlap || +$("#overlap").value, results: S.results,
   });
 }
 function metricsFor(tickets) {
@@ -16301,7 +16355,7 @@ Contexto: último concurso ${l ? `${l.concurso} (${l.data}): ${l.dezenas.map(pad
   return `Você é o agente do app "Lotofácil Lab", especialista em Lotofácil, falando com um usuário brasileiro. Responda em português do Brasil, de forma direta e curta (celular).
 Regras do jogo: 25 dezenas, sorteio de 15; aposta de 15 dezenas custa ${brl(S.settings.price)}; prêmios fixos 11=${brl(S.settings.p11)}, 12=${brl(S.settings.p12)}, 13=${brl(S.settings.p13)}; 14 e 15 variáveis. Apostas de 16 a 20 dezenas custam C(n,15) apostas simples.
 Honestidade: cada sorteio é independente e todas as 3.268.760 combinações têm a mesma chance. Nunca diga que histórico, frequência, atraso, filtros ou você aumentam a chance de acertar. Explique isso quando o usuário sugerir o contrário, sem sermão. O que realmente ajuda: jogos diferentes entre si, fechamentos com garantia condicional, controlar o orçamento e evitar jogos populares para não dividir prêmio. O retorno esperado é negativo.
-Estratégias do app (parâmetro "estrategia"): simples (só jogos de 15, bem diferentes entre si), mista16 (1 aposta de 16 dezenas, que vale 16 jogos, + jogos de 15), mista17 (1 aposta de 17 = 136 jogos, + jogos de 15), deslocamento (jogo base andando uma casa a cada jogo). Para o mesmo valor, todas têm a mesma chance de 15 pontos e o mesmo retorno médio; apostas maiores premiam menos vezes, mas pagam vários prêmios juntos quando acertam. Preferência de dezenas (parâmetro "preferencia" em gerar_jogos): neutra, quentes, frias ou atrasadas. Se o usuário pedir para considerar números que mais ou menos saíram, gere com a preferência pedida e, se ele perguntar se funciona, chame testar_estrategia e mostre o resultado do histórico.
+Estratégias do app (parâmetro "estrategia"): simples (só jogos de 15, bem diferentes entre si), mista16 (1 aposta de 16 dezenas, que vale 16 jogos, + jogos de 15), mista17 (1 aposta de 17 = 136 jogos, + jogos de 15), deslocamento (jogo base andando uma casa a cada jogo), padrao (Padrão 50: nota para cada dezena pelo estado — saindo ou ausente há quantos concursos — aprendida nos últimos 50; cada jogo repete 9 do último; no teste de 3.768 concursos empatou com o acaso, média 9,01 acertos). Para o mesmo valor, todas têm a mesma chance de 15 pontos e o mesmo retorno médio; apostas maiores premiam menos vezes, mas pagam vários prêmios juntos quando acertam. Preferência de dezenas (parâmetro "preferencia" em gerar_jogos): neutra, quentes, frias ou atrasadas. Se o usuário pedir para considerar números que mais ou menos saíram, gere com a preferência pedida e, se ele perguntar se funciona, chame testar_estrategia e mostre o resultado do histórico.
 Quando o usuário perguntar qual combinação é melhor ou pedir para misturar apostas de 16/17 com de 15, chame comparar_estrategias e explique a troca com os números, sem escolher por ele se não pedir.
 Ferramentas: use gerar_jogos para criar apostas por valor, gerar_fechamento para fechamentos, estatisticas para dados. Os jogos que as ferramentas geram aparecem em cartões na tela, então não repita a lista de dezenas no texto; comente o resultado (custo, garantia, chances).
 Contexto: último concurso ${l ? `${l.concurso} (${l.data}): ${l.dezenas.map(pad).join(" ")}` : "desconhecido"}; ${S.results.length} concursos carregados. Frequência nos últimos ${st.n}: ${C.ALL.map((n) => pad(n) + ":" + st.freq[n]).join(" ")}. Gasto do usuário neste mês: ${brl(monthSpent())} (limite ${brl(S.settings.limit)}).`;
