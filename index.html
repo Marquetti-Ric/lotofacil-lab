@@ -74,6 +74,7 @@ button { cursor: pointer; }
 .iconbtn { border: 1px solid var(--line); background: var(--surface); border-radius: 999px; padding: 6px 12px; font-size: 13px; font-weight: 600; }
 
 main { padding-block: 16px 120px; }
+[hidden] { display: none !important; }
 .view { display: grid; gap: 14px; }
 h1 { font-family: var(--f-display); font-weight: 800; font-size: 28px; letter-spacing: -0.03em; line-height: 1.1; margin: 4px 0 0; text-wrap: balance; }
 h2 { font-family: var(--f-display); font-weight: 700; font-size: 18px; letter-spacing: -0.01em; margin: 0; text-wrap: balance; }
@@ -161,11 +162,10 @@ body[data-game="tm"] .passvol { max-width: 620px; gap: 4px; }
 body[data-game="tm"] .passvol .cell { font-size: 14px; }
 body[data-game="tm"] .cell.fix::after { padding: 2px 3px; font-size: 8px; }
 .timechip { display: inline-block; font-weight: 700; font-size: 13px; padding: 3px 10px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); }
-.gameswitch { display: grid; grid-template-columns: repeat(5, 1fr); background: var(--sunk); border-radius: 12px; padding: 4px; gap: 4px; width: 100%; }
+.gameswitch { display: grid; grid-template-columns: repeat(6, 1fr); background: var(--sunk); border-radius: 12px; padding: 4px; gap: 4px; width: 100%; }
 .gameswitch button { border: 0; background: transparent; border-radius: 9px; padding: 7px 1px; font-weight: 700; font-size: 13px; color: var(--muted); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .gameswitch .gs { display: none; }
-@media (max-width: 480px) { .gameswitch button { font-size: 12px; letter-spacing: -0.01em; } .gameswitch .gl { display: none; } .gameswitch .gs { display: inline; } .gameswitch .gm { display: inline; } .gameswitch .gn { display: none; } }
-@media (max-width: 400px) { .gameswitch .gm { display: none; } .gameswitch .gn { display: inline; } }
+@media (max-width: 640px) { .gameswitch { grid-template-columns: repeat(3, 1fr); } }
 .gameswitch button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
 .top .wrap { flex-wrap: wrap; }
 
@@ -181,6 +181,26 @@ body[data-game="tm"] .cell.fix::after { padding: 2px 3px; font-size: 8px; }
 .ticket .pts { font: 700 13px var(--f-mono); min-width: 52px; text-align: right; }
 
 /* Estados */
+.lc-rows { display: grid; gap: 6px; }
+.lc-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 10px; align-items: center; padding: 8px 0; border-top: 1px solid var(--line); }
+.lc-row:first-child { border-top: 0; }
+.lc-teams { font-size: 14px; line-height: 1.25; min-width: 0; }
+.lc-teams .idx { color: var(--muted); font-variant-numeric: tabular-nums; margin-right: 4px; font-size: 12px; }
+.lc-teams b { font-weight: 600; overflow-wrap: anywhere; }
+.lc-cols { display: grid; grid-template-columns: repeat(3, 52px); gap: 4px; }
+.lc-cols button { border: 1px solid var(--line); background: var(--surface); border-radius: 10px; padding: 5px 0 4px; font-weight: 700; font-size: 15px; display: grid; line-height: 1.1; color: var(--ink); }
+.lc-cols button small { font-weight: 500; font-size: 11px; color: var(--muted); }
+.lc-cols button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.lc-cols button[aria-pressed="true"] small { color: inherit; opacity: .85; }
+.lc-cols button.res { outline: 2px solid var(--good); outline-offset: 1px; }
+.lc-cols input { width: 52px; padding: 6px 4px; text-align: center; border-radius: 10px; border: 1px solid var(--line); background: var(--sunk); font-size: 14px; }
+.lc-edit { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
+.lc-edit input { min-width: 0; padding: 6px 8px; border-radius: 8px; border: 1px solid var(--line); background: var(--sunk); font-size: 13px; }
+.lc-nota { grid-column: 1 / -1; font-size: 12px; color: var(--muted); }
+.lc-conc { width: 70px; padding: 4px 6px; border-radius: 8px; border: 1px solid var(--line); background: var(--sunk); }
+.lc-vol { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; line-height: 1.5; white-space: pre-wrap; background: var(--sunk); border-radius: 10px; padding: 10px; max-height: 320px; overflow: auto; }
+body[data-game="lc"] { --accent: #b45309; --accent-soft: #fdecd3; }
+body[data-game="lc"] #tabs { display: none; }
 .note { border-radius: 12px; padding: 12px 14px; font-size: 14px; background: var(--sunk); }
 .note.good { background: var(--good-soft); color: var(--good); }
 .note.warn { background: var(--warn-soft); color: var(--warn); }
@@ -282,6 +302,7 @@ body[data-game="tm"] .cell.fix::after { padding: 2px 3px; font-size: 8px; }
       <button type="button" data-g="mm" aria-pressed="false" aria-label="+Milionária"><span class="gl">+Milionária</span><span class="gs">+Milion.</span></button>
       <button type="button" data-g="tm" aria-pressed="false" aria-label="Timemania"><span class="gl gm">Timemania</span><span class="gs gn">Timem.</span></button>
       <button type="button" data-g="lm" aria-pressed="false" aria-label="Lotomania"><span class="gl gm">Lotomania</span><span class="gs gn">Lotom.</span></button>
+      <button type="button" data-g="lc" aria-pressed="false" aria-label="Loteca"><span class="gl gm">Loteca</span><span class="gs gn">Loteca</span></button>
     </div>
   </div>
 </header>
@@ -472,6 +493,78 @@ body[data-game="tm"] .cell.fix::after { padding: 2px 3px; font-size: 8px; }
       <span class="label">Todos os jogos</span>
       <div class="passlist" id="passList"></div>
       <p class="small muted">Verde: já registrado no app da Caixa. Toque num número para ir direto ao jogo. O progresso fica salvo se você sair.</p>
+    </div>
+  </section>
+
+  <section class="view" id="v-loteca" hidden>
+    <div>
+      <h1>Loteca</h1>
+      <p class="lede">Aqui não é sorteio: é palpite. O app usa a sua avaliação de cada jogo (ou a do agente, ou as cotações) para pôr duplos e triplos onde a incerteza é maior e montar fechamentos com garantia.</p>
+    </div>
+
+    <div class="card">
+      <div class="row between"><h2>Rodada</h2><label class="small muted">Concurso <input id="lcConc" class="lc-conc" inputmode="numeric" placeholder="nº"></label></div>
+      <details id="lcProgBox">
+        <summary class="small">Colar a programação (os 14 jogos)</summary>
+        <p class="small muted">Copie a lista de jogos do site ou app da Caixa, ou de uma notícia, e cole aqui. Uma linha por jogo, por exemplo “1 FLAMENGO/RJ x PALMEIRAS/SP Sábado”.</p>
+        <textarea id="lcProg" rows="7" placeholder="1 FLAMENGO/RJ x PALMEIRAS/SP&#10;2 SANTOS/SP x CORINTHIANS/SP&#10;..."></textarea>
+        <div class="row"><button class="btn" type="button" id="lcProgOk">Usar estes jogos</button><span class="small muted" id="lcProgMsg"></span></div>
+      </details>
+      <div class="seg" id="lcMode">
+        <button type="button" data-m="marcar" aria-pressed="true">Marcar</button>
+        <button type="button" data-m="avaliar" aria-pressed="false">Avaliar</button>
+        <button type="button" data-m="resultado" aria-pressed="false">Resultado</button>
+      </div>
+      <p class="small muted" id="lcModeHelp"></p>
+      <div id="lcRows" class="lc-rows"></div>
+    </div>
+
+    <div class="card" id="lcResumo"></div>
+
+    <div class="card">
+      <h2>Avaliação dos jogos</h2>
+      <p class="small">As porcentagens de cada jogo são a base de tudo. Use a sua opinião (modo Avaliar), as cotações das casas de aposta (o jeito mais confiável de saber o que o mercado espera) ou peça ao agente.</p>
+      <div class="row">
+        <button class="btn line" type="button" id="lcBase">Fator campo</button>
+        <button class="btn line" type="button" id="lcIgual">Tudo igual (33%)</button>
+        <button class="btn line" type="button" id="lcAgente">Pedir ao agente</button>
+      </div>
+      <details>
+        <summary class="small">Colar cotações (odds)</summary>
+        <p class="small muted">Uma linha por jogo, na ordem, com as três cotações decimais: mandante, empate, visitante. Ex.: “1,85 3,40 4,50”. O app tira a margem da casa e converte em porcentagem.</p>
+        <textarea id="lcOdds" rows="6" placeholder="1,85 3,40 4,50&#10;2,10 3,20 3,60&#10;..."></textarea>
+        <div class="row"><button class="btn" type="button" id="lcOddsOk">Usar cotações</button><span class="small muted" id="lcOddsMsg"></span></div>
+      </details>
+      <p class="small muted" id="lcAgMsg"></p>
+    </div>
+
+    <div class="card">
+      <h2>Montar pelo orçamento</h2>
+      <label class="money" for="lcBudget"><span>R$</span><input id="lcBudget" inputmode="decimal" value="72"></label>
+      <div class="row" id="lcChips"></div>
+      <button class="btn wide" type="button" id="lcOtimizar">Montar com a maior chance de 14</button>
+      <p class="small muted">O app escolhe, pelas porcentagens, quais jogos recebem duplo ou triplo e qual coluna fica no seco. Limites da Caixa: até 9 duplos, 6 triplos ou 5 duplos + 3 triplos por volante (R$ 2 por combinação, mínimo R$ 4).</p>
+    </div>
+
+    <div class="card">
+      <h2>Fechamento</h2>
+      <p class="small">Marque mais duplos e triplos do que cabe num volante e escolha a garantia. Ela vale se o resultado de cada jogo estiver entre as colunas que você marcou.</p>
+      <div class="row">
+        <button class="btn" type="button" id="lcFc14">Garantir 14 (todas as combinações)</button>
+        <button class="btn line" type="button" id="lcFc13">Garantir 13 (fechamento reduzido)</button>
+      </div>
+      <div id="lcFcOut"></div>
+    </div>
+
+    <div class="card">
+      <div class="row between"><h2>Meus volantes</h2><span class="pill" id="lcCount"></span></div>
+      <details>
+        <summary class="small">Colar o resultado do concurso</summary>
+        <p class="small muted">Uma linha por jogo, com o placar (“FLAMENGO 2 x 1 PALMEIRAS”) ou a coluna (“COLUNA DO MEIO”). Também dá para marcar no modo Resultado, lá em cima.</p>
+        <textarea id="lcRes" rows="6"></textarea>
+        <div class="row"><button class="btn" type="button" id="lcResOk">Usar resultado</button><span class="small muted" id="lcResMsg"></span></div>
+      </details>
+      <div id="lcSaved"></div>
     </div>
   </section>
 
@@ -2467,6 +2560,249 @@ const LM = (() => {
     ALL, PRIMOS, MOLDURA, TOTAL_COMB, comb, probHits, metrics, FILTER_DEFS, passes, overlap, generateBudget, fechamento, fechamentoCost, verifyFechamento, stats, filterCoverage, hits, parseRows, parseText, shuffle, toNum };
 })();
 if (typeof module !== "undefined") module.exports = LM;
+
+/* ===== Núcleo da Loteca =====
+   14 jogos; em cada um: 0 = coluna 1 (mandante), 1 = coluna do meio (empate), 2 = coluna 2 (visitante).
+   Volante: para cada jogo, quais colunas estão marcadas (seco, duplo ou triplo).
+   Preço: R$ 2 por combinação (2^duplos x 3^triplos), mínimo R$ 4 (a aposta mínima já dá direito a um duplo).
+   Limites usados: até 9 duplos, até 6 triplos e até 864 combinações por volante (5 duplos + 3 triplos). */
+const LC = (() => {
+  const G = 14, COLS = ["1", "X", "2"], NOMES = ["Coluna 1", "Coluna do meio", "Coluna 2"];
+  const PRICE = 2, MIN = 4, MAXD = 9, MAXT = 6, MAXC = 864;
+  const BASE = [0.46, 0.28, 0.26]; // fator campo aproximado (mandante, empate, visitante)
+
+  const count = (m) => m.reduce((a, x) => a + (x ? 1 : 0), 0);
+  function shape(marks) {
+    let d = 0, t = 0, vazio = 0;
+    for (const m of marks) { const c = count(m); if (c === 2) d++; else if (c === 3) t++; else if (c === 0) vazio++; }
+    return { d, t, vazio, combos: Math.pow(2, d) * Math.pow(3, t) };
+  }
+  const cost = (marks) => Math.max(MIN, shape(marks).combos * PRICE);
+  function check(marks) {
+    const s = shape(marks);
+    if (s.vazio) return { ok: false, msg: `Falta marcar ${s.vazio} ${s.vazio === 1 ? "jogo" : "jogos"}.`, ...s };
+    if (s.d > MAXD) return { ok: false, msg: `Máximo de ${MAXD} duplos por volante.`, ...s };
+    if (s.t > MAXT) return { ok: false, msg: `Máximo de ${MAXT} triplos por volante.`, ...s };
+    if (s.combos > MAXC) return { ok: false, msg: `Passa de ${MAXC} combinações (o maior volante é 5 duplos + 3 triplos). Use o fechamento para dividir em vários volantes.`, ...s };
+    return { ok: true, msg: "", ...s };
+  }
+
+  /* ---------- Probabilidades ---------- */
+  const norm = (p) => { const s = p[0] + p[1] + p[2]; return s > 0 ? p.map((x) => x / s) : BASE.slice(); };
+  const covOf = (p, m) => (m[0] ? p[0] : 0) + (m[1] ? p[1] : 0) + (m[2] ? p[2] : 0);
+  // chance de 14 e de exatamente 13 de um volante (jogos independentes)
+  function chances(P, marks) {
+    const cov = marks.map((m, i) => covOf(P[i], m));
+    const p14 = cov.reduce((a, c) => a * c, 1);
+    let p13 = 0;
+    for (let j = 0; j < G; j++) { let x = 1 - cov[j]; for (let i = 0; i < G; i++) if (i !== j) x *= cov[i]; p13 += x; }
+    return { p14, p13, cov, esperados: cov.reduce((a, c) => a + c, 0) };
+  }
+  const ordem = (p) => [0, 1, 2].sort((a, b) => p[b] - p[a] || a - b);
+  function marksFor(p, kind) { const o = ordem(p), m = [false, false, false]; const k = kind === "t" ? 3 : kind === "d" ? 2 : 1; for (let i = 0; i < k; i++) m[o[i]] = true; return m; }
+  // Escolhe onde pôr duplos e triplos para a maior chance de 14 dentro do orçamento
+  function otimizar(P, budget) {
+    const maxComb = Math.min(MAXC, Math.max(2, Math.floor(budget / PRICE)));
+    let best = null;
+    for (let t = 0; t <= MAXT; t++) for (let d = 0; d <= MAXD; d++) {
+      const comb = Math.pow(2, d) * Math.pow(3, t);
+      if (comb > maxComb || d + t > G) continue;
+      // DP: melhor soma de log(cobertura) usando exatamente d duplos e t triplos
+      const NEG = -1e18;
+      let dp = Array.from({ length: d + 1 }, () => Array(t + 1).fill(NEG)); dp[0][0] = 0;
+      const from = [];
+      for (let i = 0; i < G; i++) {
+        const p = P[i], o = ordem(p);
+        const ls = Math.log(Math.max(p[o[0]], 1e-9)), ld = Math.log(Math.max(p[o[0]] + p[o[1]], 1e-9)), lt = 0;
+        const nd = Array.from({ length: d + 1 }, () => Array(t + 1).fill(NEG)), fr = Array.from({ length: d + 1 }, () => Array(t + 1).fill(""));
+        for (let a = 0; a <= d; a++) for (let b = 0; b <= t; b++) {
+          if (dp[a][b] === NEG) continue;
+          const tryS = (na, nb, v, k) => { if (na <= d && nb <= t && dp[a][b] + v > nd[na][nb]) { nd[na][nb] = dp[a][b] + v; fr[na][nb] = k; } };
+          tryS(a, b, ls, "s"); tryS(a + 1, b, ld, "d"); tryS(a, b + 1, lt, "t");
+        }
+        dp = nd; from.push(fr);
+      }
+      if (dp[d][t] === NEG) continue;
+      // reconstrói
+      const kinds = Array(G); let a = d, b = t;
+      for (let i = G - 1; i >= 0; i--) { const k = from[i][a][b]; kinds[i] = k; if (k === "d") a--; else if (k === "t") b--; }
+      const marks = kinds.map((k, i) => marksFor(P[i], k));
+      const p14 = Math.exp(dp[d][t]);
+      const c = Math.max(MIN, comb * PRICE);
+      if (!best || p14 > best.p14 + 1e-15 || (Math.abs(p14 - best.p14) <= 1e-15 && c < best.cost)) best = { marks, p14, cost: c, d, t, combos: comb };
+    }
+    return best;
+  }
+
+  /* ---------- Fechamento ----------
+     Garantia 14: divide as marcações em volantes válidos (cobre todas as combinações).
+     Garantia 13: volantes com 1 duplo cada (R$ 4); se todos os resultados estiverem nas suas marcações,
+     pelo menos um volante faz 13 ou 14. */
+  function dividir(marks) {
+    const out = [];
+    const go = (m) => {
+      if (check(m).ok) { out.push(m.map((x) => x.slice())); return; }
+      // abre o jogo com mais colunas (triplo primeiro) em volantes separados
+      let j = -1, best = 1;
+      m.forEach((x, i) => { const c = count(x); if (c > best) { best = c; j = i; } });
+      if (j < 0) { out.push(m.map((x) => x.slice())); return; }
+      const cols = [0, 1, 2].filter((c) => m[j][c]);
+      if (cols.length === 3) { // triplo vira duplo + seco
+        const a = m.map((x) => x.slice()); a[j] = [false, false, false]; a[j][cols[0]] = true; a[j][cols[1]] = true;
+        const b = m.map((x) => x.slice()); b[j] = [false, false, false]; b[j][cols[2]] = true;
+        go(a); go(b);
+      } else for (const c of cols) { const a = m.map((x) => x.slice()); a[j] = [false, false, false]; a[j][c] = true; go(a); }
+    };
+    go(marks);
+    return out;
+  }
+  // espaço das combinações dentro das marcações
+  function espaco(marks) {
+    const opts = marks.map((m) => [0, 1, 2].filter((c) => m[c]));
+    const rad = opts.map((o) => o.length);
+    const mul = Array(G); let M = 1;
+    for (let i = G - 1; i >= 0; i--) { mul[i] = M; M *= rad[i]; }
+    const pos = opts.map((o) => { const r = [-1, -1, -1]; o.forEach((c, k) => (r[c] = k)); return r; });
+    const idx = (w) => { let s = 0; for (let i = 0; i < G; i++) s += pos[i][w[i]] * mul[i]; return s; };
+    const word = (x) => { const w = Array(G); for (let i = 0; i < G; i++) { w[i] = opts[i][Math.floor(x / mul[i]) % rad[i]]; } return w; };
+    return { opts, rad, mul, M, idx, word };
+  }
+  // linhas (palpites secos) de um volante
+  function linhas(m) {
+    let out = [[]];
+    for (let i = 0; i < G; i++) { const cs = [0, 1, 2].filter((c) => m[i][c]); const n = []; for (const l of out) for (const c of cs) n.push([...l, c]); out = n; }
+    return out;
+  }
+  function fechamento13(marks, { onProgress, shouldStop } = {}) {
+    const E = espaco(marks);
+    if (E.M > 3e6) throw new Error("Marcações demais para o fechamento (mais de 3 milhões de combinações).");
+    const covered = new Uint8Array(E.M);
+    let left = E.M, cursor = 0;
+    const multi = E.opts.map((o, i) => (o.length > 1 ? i : -1)).filter((i) => i >= 0);
+    const vizinhos = (w, cb) => { // a própria linha e as que diferem em 1 jogo (dentro das marcações)
+      cb(E.idx(w));
+      for (const i of multi) { const orig = w[i]; for (const c of E.opts[i]) if (c !== orig) { w[i] = c; cb(E.idx(w)); } w[i] = orig; }
+    };
+    const gain = (lines) => { const seen = new Set(); let g = 0; for (const l of lines) vizinhos(l.slice(), (x) => { if (!covered[x] && !seen.has(x)) { seen.add(x); g++; } }); return g; };
+    const tickets = [];
+    let step = 0;
+    while (left > 0) {
+      if (shouldStop && shouldStop()) return null;
+      while (covered[cursor]) cursor++;
+      const u = E.word(cursor);
+      const cands = [];
+      if (!multi.length) cands.push({ base: u, dup: -1, alt: -1 });
+      for (const g of multi) for (const c of E.opts[g]) if (c !== u[g]) cands.push({ base: u, dup: g, alt: c });
+      let best = null, bg = -1;
+      for (const cd of cands) {
+        const lines = [cd.base]; if (cd.dup >= 0) { const l2 = cd.base.slice(); l2[cd.dup] = cd.alt; lines.push(l2); }
+        const g = gain(lines); if (g > bg) { bg = g; best = { ...cd, lines }; }
+      }
+      for (const l of best.lines) vizinhos(l.slice(), (x) => { if (!covered[x]) { covered[x] = 1; left--; } });
+      const m = best.base.map((c) => { const r = [false, false, false]; r[c] = true; return r; });
+      if (best.dup >= 0) m[best.dup][best.alt] = true;
+      tickets.push(m);
+      if (onProgress && ++step % 50 === 0) onProgress(E.M - left, E.M, tickets.length);
+    }
+    // tira volantes redundantes
+    const cnt = new Uint16Array(E.M);
+    const cobre = (m, cb) => { for (const l of linhas(m)) vizinhos(l, cb); };
+    for (const m of tickets) { const s = new Set(); cobre(m, (x) => s.add(x)); for (const x of s) if (cnt[x] < 65535) cnt[x]++; }
+    const keep = [];
+    for (let i = tickets.length - 1; i >= 0; i--) {
+      const s = new Set(); cobre(tickets[i], (x) => s.add(x));
+      let red = true; for (const x of s) if (cnt[x] < 2) { red = false; break; }
+      if (red) for (const x of s) cnt[x]--; else keep.push(tickets[i]);
+    }
+    return keep.reverse();
+  }
+  // Conferência independente: todas as combinações dentro das marcações têm um volante com pelo menos k acertos
+  function conferirGarantia(marks, volantes, k) {
+    const E = espaco(marks);
+    const sets = volantes.map((v) => v.map((m) => m.slice()));
+    let worst = G;
+    for (let x = 0; x < E.M; x++) {
+      const w = E.word(x); let b = 0;
+      for (const v of sets) { let h = 0; for (let i = 0; i < G; i++) if (v[i][w[i]]) h++; if (h > b) { b = h; if (b >= k) break; } }
+      if (b < worst) worst = b;
+      if (worst < k) return { ok: false, worst };
+    }
+    return { ok: true, worst };
+  }
+  // Chances exatas de um conjunto de volantes, dadas as probabilidades de cada jogo.
+  // Cada resultado possível dos 14 jogos vira um índice em base 3 (3^14 = 4.782.969); marca os de 14 e os de 13.
+  function chancesSistema(P, volantes) {
+    const N3 = 4782969, mark = new Uint8Array(N3);
+    const pw = Array.from({ length: G }, (_, i) => Math.pow(3, G - 1 - i));
+    const prob = (x) => { let pr = 1; for (let i = 0; i < G; i++) pr *= P[i][Math.floor(x / pw[i]) % 3]; return pr; };
+    let p14 = 0, p13plus = 0;
+    for (const v of volantes) for (const l of linhas(v)) {
+      let x = 0; for (let i = 0; i < G; i++) x += l[i] * pw[i];
+      if (mark[x] < 2) { const pr = prob(x); if (mark[x] === 0) p13plus += pr; p14 += pr; mark[x] = 2; }
+      for (let i = 0; i < G; i++) for (let c = 0; c < 3; c++) if (c !== l[i]) { const y = x + (c - l[i]) * pw[i]; if (mark[y] === 0) { mark[y] = 1; p13plus += prob(y); } }
+    }
+    return { p14, p13: p13plus - p14 };
+  }
+
+  /* ---------- Conferência de um volante ---------- */
+  function conferir(m, res) {
+    let hits = 0, fora = -1;
+    for (let i = 0; i < G; i++) { if (res[i] === null || res[i] === undefined) continue; if (m[i][res[i]]) hits++; else fora = i; }
+    const all = res.every((r) => r !== null && r !== undefined);
+    let n14 = 0, n13 = 0;
+    if (all && hits === G) { n14 = 1; n13 = m.reduce((a, x) => a + count(x) - 1, 0); }
+    else if (all && hits === G - 1) n13 = count(m[fora]);
+    return { hits, n14, n13, completo: all };
+  }
+
+  /* ---------- Leitura de textos colados ---------- */
+  const DIAS = /\b(segunda|terça|terca|quarta|quinta|sexta|sábado|sabado|domingo|seg|ter|qua|qui|sex|sáb|sab|dom)(-feira)?\.?\b.*$/i;
+  const limpa = (s) => s.replace(/\s+/g, " ").replace(/^[\s\-–:|.]+|[\s\-–:|.]+$/g, "").trim();
+  function parseProgramacao(text) {
+    const out = [];
+    for (let line of String(text).split(/\r?\n/)) {
+      line = line.replace(/\t+/g, " | ").trim();
+      if (!line) continue;
+      line = line.replace(/^(jogo\s*)?\d{1,2}\s*[:.\-–)|]?\s+/i, "");
+      line = line.replace(/\b\d{1,2}\/\d{1,2}(\/\d{2,4})?\b.*$/, "").replace(DIAS, "");
+      line = line.replace(/\b(coluna\s*(1|2|do meio)|empate)\b.*$/i, "");
+      let parts = line.split(/\s+(?:x|X|vs\.?|versus|×)\s+|\s*\|\s*/).map(limpa).filter(Boolean);
+      parts = parts.map((p) => p.replace(/\s+\d+\s*$/, "").replace(/^\d+\s+/, "")).filter((p) => p && !/^\d+$/.test(p));
+      if (parts.length >= 2) out.push({ m: parts[0], v: parts[1] });
+      if (out.length === G) break;
+    }
+    return out;
+  }
+  function parseResultado(text) {
+    const out = [];
+    for (const raw of String(text).split(/\r?\n/)) {
+      const line = raw.trim(); if (!line) continue;
+      let r = null;
+      if (/coluna\s*do\s*meio|\bmeio\b|\bempate\b/i.test(line)) r = 1;
+      else if (/coluna\s*1\b/i.test(line)) r = 0;
+      else if (/coluna\s*2\b/i.test(line)) r = 2;
+      else { const g = line.replace(/^(jogo\s*)?\d{1,2}\s*[:.\-–)]\s*/i, "").match(/(\d+)\s*[xX×-]\s*(\d+)/); if (g) { const a = +g[1], b = +g[2]; r = a > b ? 0 : a === b ? 1 : 2; } }
+      if (r === null) { const t = line.replace(/^(jogo\s*)?\d{1,2}\s*[:.\-–)]?\s*/i, "").trim(); if (/^(1|x|2)$/i.test(t)) r = t.toUpperCase() === "X" ? 1 : +t === 1 ? 0 : 2; }
+      if (r !== null) out.push(r);
+      if (out.length === G) break;
+    }
+    return out;
+  }
+  // odds decimais (casas de aposta) -> probabilidades sem a margem
+  function parseOdds(text) {
+    const out = [];
+    for (const raw of String(text).split(/\r?\n/)) {
+      const nums = (raw.replace(/^(jogo\s*)?\d{1,2}\s*[:.\-–)]\s+/i, "").match(/\d+(?:[.,]\d+)?/g) || []).map((x) => +x.replace(",", ".")).filter((x) => x > 1 && x < 100);
+      if (nums.length >= 3) { const inv = nums.slice(-3).map((x) => 1 / x); out.push(norm(inv)); }
+      if (out.length === G) break;
+    }
+    return out;
+  }
+  const texto = (jogos, marks) => marks.map((m, i) => `${String(i + 1).padStart(2, "0")} ${jogos[i] ? jogos[i].m + " x " + jogos[i].v : "Jogo " + (i + 1)}: ${[0, 1, 2].filter((c) => m[c]).map((c) => COLS[c]).join(" ")}`).join("\n");
+
+  return { G, COLS, NOMES, PRICE, MIN, MAXD, MAXT, MAXC, BASE, shape, cost, check, norm, chances, otimizar, marksFor, ordem, dividir, linhas, fechamento13, conferirGarantia, chancesSistema, conferir, parseProgramacao, parseResultado, parseOdds, texto, count };
+})();
+if (typeof module !== "undefined") module.exports = LC;
 
 </script>
 <script>
@@ -15368,6 +15704,7 @@ GAMES.lm = {
   looseText: (h, len) => (len === 50 && (h >= 15 || h === 0) ? ` · prêmio${h === 20 ? " principal!" : ` de cerca de ${brl(prizeFor(h))} (valor de referência)`}` : ""),
   sugs: ["Gere R$ 30 em jogos com espelho", "Jogar nos números quentes funciona? Teste no histórico", "Monte um fechamento de 60 números com garantia de 16", "O espelho vale a pena?", "Quais números estão mais atrasados?"],
 };
+const START_LC = (() => { try { return localStorage.getItem("lflab.game") === "lc"; } catch { return false; } })();
 let GID = (() => { try { const g = localStorage.getItem("lflab.game"); return GAMES[g] ? g : "lf"; } catch { return "lf"; } })();
 let CFG = GAMES[GID], C = CFG.core;
 
@@ -15470,6 +15807,7 @@ const ticketsText = (ts) => ts.map(betText).join("\n") + (isTM() && S.time ? `\n
 const VIEWS = ["gerar", "fechamento", "numeros", "conferir", "agente", "dados", "passar"];
 function show(v) {
   if (!VIEWS.includes(v)) v = "gerar";
+  if (GID === "lc" && typeof leaveLoteca === "function") return; // a Loteca tem tela própria
   currentView = v;
   VIEWS.forEach((x) => { $("#v-" + x).hidden = x !== v; });
   document.querySelectorAll("#tabs button").forEach((b) => b.setAttribute("aria-current", b.dataset.v === v ? "page" : "false"));
@@ -16649,6 +16987,8 @@ $("#overlap").addEventListener("change", (e) => { S.overlap = +e.target.value; }
 $("#timeSel").addEventListener("change", (e) => { S.time = e.target.value; try { localStorage.setItem("lflab.tm.time", S.time); } catch {} });
 $("#gameSwitch").addEventListener("click", (e) => {
   const b = e.target.closest("button"); if (!b || b.dataset.g === GID) return;
+  if (b.dataset.g === "lc") { enterLoteca(); return; }
+  if (GID === "lc") leaveLoteca();
   GID = b.dataset.g;
   try { localStorage.setItem("lflab.game", GID); } catch {}
   applyGame();
@@ -16656,11 +16996,200 @@ $("#gameSwitch").addEventListener("click", (e) => {
   if (IS_PWA) fetchOnline(true);
 });
 
+/* ===================== LOTECA ===================== */
+const LCKEY = "lflab.lc.v1";
+const lcNew = () => ({ concurso: "", jogos: Array.from({ length: 14 }, (_, i) => ({ m: `Mandante ${i + 1}`, v: `Visitante ${i + 1}` })), P: Array.from({ length: 14 }, () => LC.BASE.map((x) => Math.round(x * 100))), notas: Array(14).fill(""), marks: Array.from({ length: 14 }, () => [false, false, false]), resultados: {}, grupos: [], budget: 72 });
+let SL = (() => { try { const x = JSON.parse(localStorage.getItem(LCKEY) || "null"); if (x && x.jogos && x.jogos.length === 14) return { ...lcNew(), ...x }; } catch {} return lcNew(); })();
+let lcMode = "marcar", lcFc = null, prevGID = GID === "lc" ? "lf" : GID;
+// volante compacto: um caractere por jogo (1 a 7 = colunas marcadas em bits)
+const lcEnc = (m) => m.map((x) => String((x[0] ? 1 : 0) | (x[1] ? 2 : 0) | (x[2] ? 4 : 0))).join("");
+const lcDec = (s) => [...s].map((ch) => { const v = +ch; return [!!(v & 1), !!(v & 2), !!(v & 4)]; });
+const lcVols = (g) => (g.vc ? g.vc.map(lcDec) : g.volantes || []);
+const lcVolTxt = (vols, jogos, max = 200) => vols.slice(0, max).map((m, k) => (vols.length > 1 ? `Volante ${k + 1} (${brl(LC.cost(m))})\n` : "") + LC.texto(jogos, m)).join("\n\n") + (vols.length > max ? `\n\n… e mais ${intBR(vols.length - max)} volantes. Use “Copiar” para ter todos.` : "");
+const lcSave = () => { try { localStorage.setItem(LCKEY, JSON.stringify(SL)); } catch {} };
+const lcP = () => SL.P.map((p) => LC.norm(p.map((x) => Math.max(0, +x || 0))));
+const lcRes = () => SL.resultados[SL.concurso || "_"] || Array(14).fill(null);
+const pctTxt = (v) => (v >= 0.995 ? ">99%" : v >= 0.1 ? Math.round(v * 100) + "%" : v >= 0.001 ? (v * 100).toFixed(1).replace(".", ",") + "%" : v > 0 ? "1 em " + intBR(1 / v) : "0%");
+
+function lcRows() {
+  const res = lcRes(), P = lcP();
+  $("#lcModeHelp").textContent = lcMode === "marcar" ? "Toque nas colunas para marcar seco, duplo ou triplo. Embaixo de cada coluna, a chance pela avaliação atual." : lcMode === "avaliar" ? "Ajuste os nomes e as porcentagens de cada jogo (1, X e 2). Não precisa somar 100: o app ajusta a proporção." : "Depois dos jogos, marque o resultado de cada um para conferir os seus volantes.";
+  $("#lcRows").innerHTML = SL.jogos.map((j, i) => {
+    let cols;
+    if (lcMode === "avaliar") cols = `<div class="lc-cols">${[0, 1, 2].map((c) => `<input data-p="${c}" inputmode="numeric" aria-label="${LC.NOMES[c]}, jogo ${i + 1}" value="${SL.P[i][c]}">`).join("")}</div>`;
+    else cols = `<div class="lc-cols">${[0, 1, 2].map((c) => `<button type="button" data-c="${c}" aria-pressed="${lcMode === "resultado" ? res[i] === c : SL.marks[i][c]}" class="${lcMode === "marcar" && res[i] === c ? "res" : ""}" aria-label="${LC.NOMES[c]}, jogo ${i + 1}">${LC.COLS[c]}<small>${lcMode === "resultado" ? "&nbsp;" : Math.round(P[i][c] * 100) + "%"}</small></button>`).join("")}</div>`;
+    const teams = lcMode === "avaliar" ? `<div class="lc-edit"><input data-t="m" value="${esc(j.m)}" aria-label="Mandante do jogo ${i + 1}"><input data-t="v" value="${esc(j.v)}" aria-label="Visitante do jogo ${i + 1}"></div>` : `<div class="lc-teams"><span class="idx">${String(i + 1).padStart(2, "0")}</span><b>${esc(j.m)}</b> <span class="muted">x</span> <b>${esc(j.v)}</b></div>`;
+    return `<div class="lc-row" data-i="${i}">${teams}${cols}${SL.notas[i] && lcMode !== "resultado" ? `<div class="lc-nota">${esc(SL.notas[i])}</div>` : ""}</div>`;
+  }).join("");
+}
+function lcResumo() {
+  const ck = LC.check(SL.marks), P = lcP(), ch = LC.chances(P, SL.marks);
+  const U = Array.from({ length: 14 }, () => [1 / 3, 1 / 3, 1 / 3]), cego = LC.chances(U, SL.marks);
+  const res = lcRes(), temRes = res.some((r) => r !== null);
+  const conf = temRes ? LC.conferir(SL.marks, res) : null;
+  $("#lcResumo").innerHTML = `<div class="row between"><h2>Seu volante</h2><span class="pill">${ck.d} ${ck.d === 1 ? "duplo" : "duplos"} · ${ck.t} ${ck.t === 1 ? "triplo" : "triplos"}</span></div>
+    ${ck.vazio === 14 ? `<p class="small muted">Marque as colunas na rodada ou use “Montar pelo orçamento”.</p>` : `
+    <div class="kpis">
+      <div class="kpi"><b>${brl(LC.cost(SL.marks))}</b><span>${intBR(ck.combos)} ${ck.combos === 1 ? "combinação" : "combinações"}</span></div>
+      <div class="kpi"><b>${ck.vazio ? "—" : pctTxt(ch.p14)}</b><span>chance de 14, pela sua avaliação</span></div>
+      <div class="kpi"><b>${ck.vazio ? "—" : pctTxt(ch.p13)}</b><span>chance de 13</span></div>
+      <div class="kpi"><b>${ck.vazio ? "—" : (ch.esperados).toFixed(1).replace(".", ",")}</b><span>acertos esperados</span></div>
+    </div>
+    ${ck.ok ? "" : `<div class="note warn">${ck.msg}</div>`}
+    ${ck.vazio ? "" : `<p class="small muted">No chute cego (1/3 para cada coluna), a chance de 14 seria ${pctTxt(cego.p14)}. A diferença vem toda da avaliação dos jogos; se ela estiver errada, a chance real também muda.</p>`}
+    ${conf ? `<div class="note ${conf.n14 ? "good" : conf.n13 ? "good" : ""}">Conferência: ${conf.hits} de 14${conf.completo ? "" : " (resultado incompleto)"}${conf.n14 ? " · 14 acertos!" : ""}${conf.n13 ? ` · ${conf.n13} ${conf.n13 === 1 ? "prêmio" : "prêmios"} de 13` : ""}</div>` : ""}
+    <div class="row"><button class="btn" type="button" id="lcSalvar" ${ck.ok ? "" : "disabled"}>Salvar volante</button><button class="btn line" type="button" id="lcCopiar">Copiar</button><button class="btn line" type="button" id="lcLimpar">Limpar marcações</button></div>`}`;
+  const sv = $("#lcSalvar"); if (sv) sv.onclick = () => lcGuardar([SL.marks.map((m) => m.slice())], "Volante");
+  const cp = $("#lcCopiar"); if (cp) cp.onclick = () => copyText(lcTextoGrupo([SL.marks]));
+  const lp = $("#lcLimpar"); if (lp) lp.onclick = () => { SL.marks = Array.from({ length: 14 }, () => [false, false, false]); lcSave(); lcPaint(); };
+}
+const lcTextoGrupo = (vols) => `Loteca${SL.concurso ? " · concurso " + SL.concurso : ""}\n\n` + lcVolTxt(vols, SL.jogos, Infinity);
+function lcGuardar(vols, tipo) {
+  const custo = vols.reduce((a, m) => a + LC.cost(m), 0);
+  SL.grupos.unshift({ id: Date.now().toString(36), concurso: SL.concurso || "", nome: `${tipo} · ${intBR(vols.length)} ${vols.length === 1 ? "volante" : "volantes"} · ${brl(custo)}`, vc: vols.map(lcEnc), custo, jogos: SL.jogos.map((j) => ({ ...j })), at: Date.now() });
+  lcSave(); lcSaved(); toast("Salvo em Meus volantes.");
+}
+function lcSaved() {
+  $("#lcCount").textContent = SL.grupos.length ? `${SL.grupos.length}` : ""; $("#lcCount").hidden = !SL.grupos.length;
+  if (!SL.grupos.length) { $("#lcSaved").innerHTML = `<p class="small muted">Nenhum volante salvo ainda.</p>`; return; }
+  $("#lcSaved").innerHTML = SL.grupos.map((g) => {
+    const res = SL.resultados[g.concurso || "_"];
+    let conf = "";
+    if (res && res.some((r) => r !== null)) {
+      const cs = lcVols(g).map((m) => LC.conferir(m, res));
+      const best = Math.max(...cs.map((c) => c.hits)), n14 = cs.reduce((a, c) => a + c.n14, 0), n13 = cs.reduce((a, c) => a + c.n13, 0);
+      conf = `<p class="small ${n14 || n13 ? "" : "muted"}">Melhor volante: ${best} de 14${n14 ? ` · <b>${n14} ${n14 === 1 ? "prêmio" : "prêmios"} de 14</b>` : ""}${n13 ? ` · <b>${n13} ${n13 === 1 ? "prêmio" : "prêmios"} de 13</b>` : ""}${n14 || n13 ? " (valor conforme o rateio do concurso)" : ""}</p>`;
+    }
+    return `<div class="batch" data-id="${g.id}"><div class="row between"><b>${esc(g.nome)}</b><span class="pill">${g.concurso ? "concurso " + esc(g.concurso) : "sem concurso"}</span></div>${conf}
+      <details><summary class="small">Ver volantes</summary><div class="lc-vol">${esc(lcVolTxt(lcVols(g), g.jogos || SL.jogos))}</div></details>
+      <div class="row"><button class="btn line" type="button" data-act="copiar">Copiar</button><button class="btn line" type="button" data-act="excluir">Excluir</button></div></div>`;
+  }).join("");
+}
+function lcChips() { $("#lcChips").innerHTML = [4, 16, 32, 72, 144, 432, 864, 1728].map((v) => `<button type="button" class="chip" data-v="${v}" aria-pressed="${+SL.budget === v}">${brl(v).replace(",00", "")}</button>`).join(""); }
+function lcPaint() { lcRows(); lcResumo(); }
+function enterLoteca() {
+  if (GID !== "lc") prevGID = GID;
+  GID = "lc"; try { localStorage.setItem("lflab.game", "lc"); } catch {}
+  document.body.dataset.game = "lc";
+  document.querySelectorAll("#gameSwitch button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.g === "lc")));
+  $("#brandName").textContent = "Loteca Lab";
+  $("#hdrLast").textContent = SL.concurso ? `Concurso ${SL.concurso}` : "14 jogos de futebol";
+  $("#btnDados").hidden = true;
+  VIEWS.forEach((x) => { $("#v-" + x).hidden = true; });
+  $("#v-loteca").hidden = false;
+  $("#lcConc").value = SL.concurso || ""; $("#lcBudget").value = SL.budget;
+  document.querySelectorAll("#lcMode button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.m === lcMode)));
+  lcChips(); lcPaint(); lcSaved();
+  $("#lcAgMsg").textContent = agentMode ? "" : "O agente fica disponível quando o app está aberto no Claude ou com a chave da API configurada (em Dados, nas outras loterias).";
+  window.scrollTo(0, 0);
+}
+function leaveLoteca() { $("#v-loteca").hidden = true; $("#btnDados").hidden = false; }
+
+$("#lcMode").addEventListener("click", (e) => { const b = e.target.closest("button"); if (!b) return; lcMode = b.dataset.m; document.querySelectorAll("#lcMode button").forEach((x) => x.setAttribute("aria-pressed", String(x === b))); lcRows(); });
+$("#lcRows").addEventListener("click", (e) => {
+  const b = e.target.closest("button[data-c]"); if (!b) return;
+  const i = +b.closest(".lc-row").dataset.i, c = +b.dataset.c;
+  if (lcMode === "marcar") SL.marks[i][c] = !SL.marks[i][c];
+  else if (lcMode === "resultado") { const k = SL.concurso || "_"; const r = SL.resultados[k] || Array(14).fill(null); r[i] = r[i] === c ? null : c; SL.resultados[k] = r; lcSaved(); }
+  lcSave(); lcPaint();
+});
+$("#lcRows").addEventListener("change", (e) => {
+  const row = e.target.closest(".lc-row"); if (!row) return; const i = +row.dataset.i;
+  if (e.target.dataset.p !== undefined) SL.P[i][+e.target.dataset.p] = Math.max(0, Math.min(100, Math.round(+e.target.value.replace(",", ".") || 0)));
+  if (e.target.dataset.t) SL.jogos[i][e.target.dataset.t] = e.target.value.trim() || SL.jogos[i][e.target.dataset.t];
+  SL.notas[i] = e.target.dataset.p !== undefined ? "" : SL.notas[i];
+  lcSave(); lcResumo();
+});
+$("#lcConc").addEventListener("change", (e) => { SL.concurso = e.target.value.replace(/\D/g, ""); $("#hdrLast").textContent = SL.concurso ? `Concurso ${SL.concurso}` : "14 jogos de futebol"; lcSave(); lcPaint(); lcSaved(); });
+$("#lcProgOk").addEventListener("click", () => {
+  const js = LC.parseProgramacao($("#lcProg").value);
+  if (js.length < 14) { $("#lcProgMsg").textContent = `Encontrei ${js.length} jogos; preciso dos 14. Confira se cada linha tem “mandante x visitante”.`; if (!js.length) return; }
+  js.forEach((j, i) => { SL.jogos[i] = j; });
+  SL.notas = Array(14).fill(""); lcSave(); lcPaint();
+  if (js.length === 14) { $("#lcProgMsg").textContent = "Jogos carregados."; $("#lcProgBox").open = false; }
+});
+$("#lcBase").addEventListener("click", () => { SL.P = Array.from({ length: 14 }, () => LC.BASE.map((x) => Math.round(x * 100))); SL.notas = Array(14).fill(""); lcSave(); lcPaint(); toast("Fator campo: 46% mandante, 28% empate, 26% visitante."); });
+$("#lcIgual").addEventListener("click", () => { SL.P = Array.from({ length: 14 }, () => [33, 34, 33]); SL.notas = Array(14).fill(""); lcSave(); lcPaint(); });
+$("#lcOddsOk").addEventListener("click", () => {
+  const ps = LC.parseOdds($("#lcOdds").value);
+  if (!ps.length) { $("#lcOddsMsg").textContent = "Não encontrei cotações. Use três números por linha."; return; }
+  ps.forEach((p, i) => { SL.P[i] = p.map((x) => Math.round(x * 100)); SL.notas[i] = "pelas cotações"; });
+  lcSave(); lcPaint(); $("#lcOddsMsg").textContent = `${ps.length} ${ps.length === 1 ? "jogo atualizado" : "jogos atualizados"}${ps.length < 14 ? " (os outros ficaram como estavam)" : ""}.`;
+});
+$("#lcAgente").addEventListener("click", async () => {
+  if (!agentMode) { $("#lcAgMsg").textContent = "O agente não está disponível aqui. Abra o app pelo Claude ou configure a chave da API em Dados."; return; }
+  const btn = $("#lcAgente"); btn.disabled = true; btn.innerHTML = `<span class="spinner"></span> Avaliando…`;
+  const lista = SL.jogos.map((j, i) => `${i + 1}. ${j.m} x ${j.v}`).join("\n");
+  const sys = `Você é um analista de futebol brasileiro e internacional ajudando a preencher a Loteca. Para cada jogo, estime a probabilidade (em %) de vitória do mandante (coluna 1), empate (coluna do meio) e vitória do visitante (coluna 2), considerando força dos elencos, momento, mando de campo, tabela e o que mais souber. Seu conhecimento pode estar desatualizado: quando não tiver informação recente ou não conhecer um time, fique perto do fator campo (46/28/26) e diga isso na nota. Responda APENAS com JSON, sem texto fora dele, no formato [{"j":1,"p":[50,27,23],"nota":"até 12 palavras"}], com os 14 jogos.`;
+  try {
+    const r = await runAgent([{ role: "user", content: sys }, { role: "user", content: `Jogos da Loteca${SL.concurso ? " (concurso " + SL.concurso + ")" : ""}:\n${lista}` }], {});
+    const t = String(r.text || ""); const a = t.indexOf("["), b = t.lastIndexOf("]");
+    const arr = JSON.parse(t.slice(a, b + 1));
+    let n = 0;
+    for (const x of arr) { const i = (+x.j || 0) - 1; if (i >= 0 && i < 14 && Array.isArray(x.p) && x.p.length === 3) { SL.P[i] = x.p.map((v) => Math.max(0, Math.round(+v || 0))); SL.notas[i] = "Agente: " + String(x.nota || "").slice(0, 120); n++; } }
+    lcSave(); lcPaint();
+    $("#lcAgMsg").textContent = `O agente avaliou ${n} jogos. Revise no modo Avaliar: ele pode não saber de lesões, escalações ou fase recente.`;
+  } catch (e) { $("#lcAgMsg").textContent = "Não consegui a avaliação do agente agora. Tente de novo ou use as cotações."; }
+  btn.disabled = false; btn.textContent = "Pedir ao agente";
+});
+$("#lcChips").addEventListener("click", (e) => { const b = e.target.closest("button"); if (!b) return; SL.budget = +b.dataset.v; $("#lcBudget").value = SL.budget; lcChips(); lcSave(); });
+$("#lcBudget").addEventListener("change", (e) => { SL.budget = Math.max(4, +String(e.target.value).replace(/\./g, "").replace(",", ".") || 4); lcChips(); lcSave(); });
+$("#lcOtimizar").addEventListener("click", () => {
+  const o = LC.otimizar(lcP(), +SL.budget || 4);
+  if (!o) { toast("Não consegui montar com esse valor."); return; }
+  SL.marks = o.marks; lcSave(); lcPaint();
+  $("#lcResumo").scrollIntoView({ behavior: "smooth", block: "start" });
+  toast(`${o.d} ${o.d === 1 ? "duplo" : "duplos"} e ${o.t} ${o.t === 1 ? "triplo" : "triplos"} · ${brl(o.cost)}`);
+});
+function lcFcRender(kind, vols, M) {
+  const P = lcP(), sys = LC.chancesSistema(P, vols), custo = vols.reduce((a, m) => a + LC.cost(m), 0), cheio = M * LC.PRICE;
+  const g = LC.conferirGarantia(SL.marks, vols, kind === 14 ? 14 : 13);
+  lcFc = { kind, vols };
+  $("#lcFcOut").innerHTML = `<div class="row between"><h2>${intBR(vols.length)} ${vols.length === 1 ? "volante" : "volantes"} · ${brl(custo)}</h2><span class="pill ${g.ok ? "good" : "warn"}">${g.ok ? "garantia conferida" : "garantia falhou"}</span></div>
+    <p class="small">Se o resultado de cada jogo estiver entre as colunas marcadas, pelo menos um volante faz ${kind === 14 ? "14" : "13"} acertos. ${kind === 13 ? `Todas as combinações custariam ${brl(cheio)}; o fechamento custa ${pctTxt(custo / cheio)} disso.` : ""}</p>
+    <div class="kpis"><div class="kpi"><b>${pctTxt(LC.chances(P, SL.marks).p14)}</b><span>chance de os resultados caírem nas suas marcações</span></div><div class="kpi"><b>${pctTxt(sys.p14)}</b><span>chance de 14 com estes volantes</span></div><div class="kpi"><b>${pctTxt(sys.p13)}</b><span>chance de 13 (sem 14)</span></div></div>
+    <details><summary class="small">Ver volantes</summary><div class="lc-vol">${esc(lcVolTxt(vols, SL.jogos))}</div></details>
+    <div class="row"><button class="btn" type="button" id="lcFcSave">Salvar em Meus volantes</button><button class="btn line" type="button" id="lcFcCopy">Copiar</button></div>`;
+  $("#lcFcSave").onclick = () => lcGuardar(vols.map((m) => m.map((x) => x.slice())), kind === 14 ? "Fechamento 14" : "Fechamento 13");
+  $("#lcFcCopy").onclick = () => copyText(lcTextoGrupo(vols));
+}
+function lcFcPre() {
+  const ck = LC.check(SL.marks);
+  if (ck.vazio) { toast("Marque todos os 14 jogos primeiro."); return null; }
+  return ck;
+}
+$("#lcFc14").addEventListener("click", () => {
+  const ck = lcFcPre(); if (!ck) return;
+  if (ck.combos > 200000) { toast("Combinações demais: mais de R$ 400 mil. Reduza as marcações."); return; }
+  lcFcRender(14, LC.dividir(SL.marks), ck.combos);
+});
+$("#lcFc13").addEventListener("click", () => {
+  const ck = lcFcPre(); if (!ck) return;
+  if (ck.combos > 600000) { toast("Marcações demais para calcular aqui. Tire alguns duplos ou triplos."); return; }
+  if (ck.combos <= 2) { toast("Com essas marcações já é um volante só."); return; }
+  $("#lcFcOut").innerHTML = `<p class="small"><span class="spinner"></span> Calculando o fechamento…</p>`;
+  setTimeout(() => { try { lcFcRender(13, LC.fechamento13(SL.marks), ck.combos); } catch (e) { $("#lcFcOut").innerHTML = `<div class="note warn">${esc(e.message || e)}</div>`; } }, 30);
+});
+$("#lcResOk").addEventListener("click", () => {
+  const r = LC.parseResultado($("#lcRes").value);
+  if (!r.length) { $("#lcResMsg").textContent = "Não reconheci o resultado. Use o placar ou a coluna em cada linha."; return; }
+  const k = SL.concurso || "_"; const cur = SL.resultados[k] || Array(14).fill(null);
+  r.forEach((x, i) => { cur[i] = x; }); SL.resultados[k] = cur;
+  lcSave(); lcPaint(); lcSaved(); $("#lcResMsg").textContent = `${r.length} ${r.length === 1 ? "resultado lido" : "resultados lidos"}.`;
+});
+$("#lcSaved").addEventListener("click", (e) => {
+  const b = e.target.closest("button[data-act]"); if (!b) return;
+  const id = b.closest(".batch").dataset.id, g = SL.grupos.find((x) => x.id === id); if (!g) return;
+  if (b.dataset.act === "copiar") copyText(`Loteca${g.concurso ? " · concurso " + g.concurso : ""}\n\n` + lcVolTxt(lcVols(g), g.jogos || SL.jogos, Infinity));
+  if (b.dataset.act === "excluir") { if (b.dataset.ok) { SL.grupos = SL.grupos.filter((x) => x.id !== id); lcSave(); lcSaved(); } else { b.dataset.ok = "1"; b.textContent = "Confirmar exclusão"; } }
+});
+
 /* ---------- Início ---------- */
 applyGame();
 const start = (location.hash || "").replace("#", "");
 show(VIEWS.includes(start) ? start : "gerar");
 if (IS_PWA) fetchOnline(true);
+if (START_LC || start === "loteca") enterLoteca();
 </script>
 
 <script>
