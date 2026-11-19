@@ -14,6 +14,7 @@
     mm: { nome: "+Milionária", rota: "mais-milionaria", max: 50, min: 6, maxSel: 12 },
     tm: { nome: "Timemania", rota: "timemania", max: 80, min: 10, maxSel: 10 },
     lm: { nome: "Lotomania", rota: "lotomania", max: 100, min: 50, maxSel: 50 },
+    qn: { nome: "Quina", rota: "quina", max: 80, min: 5, maxSel: 15 },
   };
   var wait = function (ms) { return new Promise(function (r) { setTimeout(r, ms); }); };
   var pad = function (n) { return n === 100 ? "00" : (n < 10 ? "0" : "") + n; }; // Lotomania: 00 = 100
@@ -27,6 +28,7 @@
     if (h.indexOf("milionaria") >= 0) return "mm";
     if (h.indexOf("timemania") >= 0) return "tm";
     if (h.indexOf("lotomania") >= 0) return "lm";
+    if (/#\/quina\b|\/quina\b/.test(h) && h.indexOf("milionaria") < 0) return "qn";
     return null;
   }
   function total() {
@@ -122,7 +124,7 @@
   $(".parar").onclick = function () { parar = true; };
   function mostrarJogo() {
     var g = jogoDaPagina();
-    $(".jogo").textContent = g ? "Página: " + JOGOS[g].nome : "Abra a página de uma modalidade (Lotofácil, Mega-Sena, +Milionária, Timemania ou Lotomania).";
+    $(".jogo").textContent = g ? "Página: " + JOGOS[g].nome : "Abra a página de uma modalidade (Lotofácil, Mega-Sena, Quina, +Milionária, Timemania ou Lotomania).";
   }
   mostrarJogo();
   window.addEventListener("hashchange", mostrarJogo);
