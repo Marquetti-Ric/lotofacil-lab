@@ -24510,8 +24510,71 @@ async function apiSample(turns, { tools = [], signal, onText, webSearch = false,
   }
   return { text: all };
 }
-let agentMode = null; // "claude" | "api" | null
-function runAgent(turns, opts = {}) { const { webSearch, maxTokens, ...rest } = opts; return agentMode === "claude" ? sample(turns, { cache: false, ...rest }) : apiSample(turns, opts); }
+/* Alternativa gratuita: chave do Google Gemini (aistudio.google.com), também guardada só neste aparelho */
+const KEY_PROV = "lflab.provider", KEY_GEM = "lflab.gemkey", KEY_GEMMODEL = "lflab.gemmodel";
+const GEM_MODELS = [["gemini-flash-latest", "Gemini Flash (recomendado)"], ["gemini-flash-lite-latest", "Gemini Flash-Lite (mais rápido)"], ["gemini-2.5-flash", "Gemini 2.5 Flash"]];
+const lsGet = (k, d = "") => { try { return localStorage.getItem(k) || d; } catch { return d; } };
+const gemKey = () => lsGet(KEY_GEM), gemModel = () => lsGet(KEY_GEMMODEL, GEM_MODELS[0][0]);
+const provider = () => lsGet(KEY_PROV, gemKey() && !apiKey() ? "gemini" : "anthropic");
+async function geminiSample(turns, { tools = [], signal, onText, webSearch = false, maxTokens = 1500 } = {}) {
+  const systemInstruction = { parts: [{ text: turns[0].content }] };
+  const contents = turns.slice(1).map((t) => ({ role: t.role === "assistant" ? "model" : "user", parts: [{ text: typeof t.content === "string" ? t.content : JSON.stringify(t.content) }] }));
+  const decls = tools.map((t) => ({ name: t.name, description: t.description, parametersJsonSchema: t.inputSchema || { type: "object", properties: {} } }));
+  let web = webSearch, all = "";
+  const call = async () => {
+    const body = { systemInstruction, contents, generationConfig: { maxOutputTokens: Math.max(maxTokens, 2048) } };
+    if (web) body.tools = [{ google_search: {} }];
+    else if (decls.length) body.tools = [{ functionDeclarations: decls }];
+    let res;
+    try {
+      res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(gemModel())}:generateContent`, {
+        method: "POST", signal, headers: { "content-type": "application/json", "x-goog-api-key": gemKey() }, body: JSON.stringify(body),
+      });
+    } catch (e) { throw { code: signal && signal.aborted ? "cancelled" : "network", text: all }; }
+    if (!res.ok) {
+      let detail = ""; try { detail = (await res.json()).error?.message || ""; } catch {}
+      throw { code: /API key|API_KEY/i.test(detail) || res.status === 401 || res.status === 403 ? "bad_key" : res.status === 429 ? "rate_limited" : "api_error", status: res.status, detail, text: all };
+    }
+    return res.json();
+  };
+  for (let round = 0; round < 8; round++) {
+    let data;
+    try { data = await call(); }
+    catch (e) {
+      // pesquisa no Google pode não estar liberada no plano gratuito: tenta de novo sem pesquisar
+      if (web && e.code !== "bad_key" && e.code !== "cancelled" && e.code !== "network") { web = false; data = await call(); }
+      else throw e;
+    }
+    const cand = (data.candidates || [])[0];
+    if (!cand || !cand.content) {
+      const why = data.promptFeedback?.blockReason || cand?.finishReason || "sem resposta";
+      if (all) return { text: all, web };
+      throw { code: "api_error", detail: "O Gemini não respondeu (" + why + ").", text: all };
+    }
+    const parts = cand.content.parts || [];
+    const text = parts.filter((x) => x.text && !x.thought).map((x) => x.text).join("");
+    if (text.trim()) { all += (all ? "\n\n" : "") + text.trim(); onText && onText({ text: all }); }
+    const calls = parts.filter((x) => x.functionCall);
+    if (!calls.length) return { text: all || "Pronto.", web };
+    contents.push(cand.content);
+    const resp = [];
+    for (const c of calls) {
+      const tool = tools.find((t) => t.name === c.functionCall.name);
+      let out;
+      try { out = tool ? await tool.execute(c.functionCall.args || {}, { signal }) : "Ferramenta desconhecida"; } catch (e) { out = "Error: " + (e && e.message ? e.message : e); }
+      resp.push({ functionResponse: { name: c.functionCall.name, response: { result: typeof out === "string" ? out : JSON.stringify(out) } } });
+    }
+    contents.push({ role: "user", parts: resp });
+  }
+  return { text: all, web };
+}
+let agentMode = null; // "claude" | "api" | "gemini" | null
+function runAgent(turns, opts = {}) {
+  const { webSearch, maxTokens, ...rest } = opts;
+  if (agentMode === "claude") return sample(turns, { cache: false, ...rest });
+  if (agentMode === "gemini") return geminiSample(turns, opts);
+  return apiSample(turns, opts);
+}
 
 async function askAgent() {
   const q = $("#ask").value.trim();
@@ -24539,7 +24602,7 @@ async function askAgent() {
     const msgs = {
       not_granted: "Você não liberou o uso do Claude nesta página.", rate_limited: "Muitos pedidos seguidos. Tente de novo em instantes.",
       session_expired: "Sua sessão expirou. Entre de novo no Claude.", tools_unavailable: "Este aplicativo do Claude ainda não roda as ferramentas do agente.",
-      bad_key: "A chave da API foi recusada. Confira se copiou a chave inteira em Agente → Chave da API.",
+      bad_key: "A chave foi recusada. Confira se copiou a chave inteira em Agente → Ligar o agente.",
       no_credit: "A conta da API está sem créditos. Adicione créditos no console da Anthropic.",
       network: "Sem conexão com a API agora. Verifique a internet e tente de novo.",
     };
@@ -24561,32 +24624,48 @@ $("#ask").addEventListener("keydown", (e) => { if (e.key === "Enter" && !e.shift
 
 function setAgentReady(on) { $("#composer").hidden = !on; $("#agentSug").hidden = !on; }
 function renderKeyCard(open) {
-  const has = !!apiKey();
-  agentMode = has ? "api" : null;
+  const prov = provider();
+  const has = prov === "gemini" ? !!gemKey() : !!apiKey();
+  agentMode = has ? (prov === "gemini" ? "gemini" : "api") : null;
   setAgentReady(has);
   $("#agentOff").hidden = false;
+  const nomeProv = prov === "gemini" ? "chave gratuita do Gemini" : "chave da API do Claude";
   $("#agentOff").innerHTML = `
     <details ${open || !has ? "open" : ""}>
-      <summary>${has ? "Agente ligado pela sua chave da API" : "Ligar o agente fora do Claude"}</summary>
+      <summary>${has ? "Agente ligado pela " + nomeProv : "Ligar o agente fora do Claude"}</summary>
       <div style="display:grid;gap:10px">
-        <p class="small">Fora do Claude, o agente usa uma chave da API da Anthropic. Crie em <span class="num">console.anthropic.com</span> → API Keys, com créditos na conta. Cada pergunta custa alguns centavos.</p>
-        <div class="field"><label class="label" for="apiKeyIn">Chave da API</label><input id="apiKeyIn" type="password" autocomplete="off" placeholder="${has ? "•••••••• (salva neste aparelho)" : "sk-ant-..."}"></div>
-        <div class="field"><label class="label" for="apiModelIn">Modelo</label><select id="apiModelIn">${MODELS.map(([v, l]) => `<option value="${v}"${v === apiModel() ? " selected" : ""}>${l}</option>`).join("")}</select></div>
+        <div class="field"><label class="label" for="provIn">Qual inteligência usar</label><select id="provIn">
+          <option value="gemini"${prov === "gemini" ? " selected" : ""}>Google Gemini · grátis</option>
+          <option value="anthropic"${prov === "anthropic" ? " selected" : ""}>Claude (API da Anthropic) · pago por uso</option>
+        </select></div>
+        <div id="provGem" ${prov === "gemini" ? "" : "hidden"} style="display:grid;gap:10px">
+          <p class="small"><b>Grátis, sem cartão:</b> entre em <span class="num">aistudio.google.com</span> com sua conta Google, toque em <b>Get API key</b> → <b>Create API key</b> e cole a chave aqui. O plano gratuito tem limite de pedidos por minuto e por dia, que dá para uso pessoal.</p>
+          <div class="field"><label class="label" for="gemKeyIn">Chave do Gemini</label><input id="gemKeyIn" type="password" autocomplete="off" placeholder="${gemKey() ? "•••••••• (salva neste aparelho)" : "AIza..."}"></div>
+          <div class="field"><label class="label" for="gemModelIn">Modelo</label><select id="gemModelIn">${GEM_MODELS.map(([v, l]) => `<option value="${v}"${v === gemModel() ? " selected" : ""}>${l}</option>`).join("")}</select></div>
+          <p class="small muted">No plano gratuito, o Google pode usar o que você envia para melhorar os produtos dele (aqui vão só jogos e números, nada pessoal). A pesquisa no Google pode não estar liberada no plano grátis: quando não estiver, o especialista da Loteca analisa sem pesquisar e avisa.</p>
+        </div>
+        <div id="provAnt" ${prov === "anthropic" ? "" : "hidden"} style="display:grid;gap:10px">
+          <p class="small">Crie a chave em <span class="num">console.anthropic.com</span> → API Keys, com créditos na conta. Cada pergunta custa alguns centavos; o especialista da Loteca pesquisa na web.</p>
+          <div class="field"><label class="label" for="apiKeyIn">Chave da API</label><input id="apiKeyIn" type="password" autocomplete="off" placeholder="${apiKey() ? "•••••••• (salva neste aparelho)" : "sk-ant-..."}"></div>
+          <div class="field"><label class="label" for="apiModelIn">Modelo</label><select id="apiModelIn">${MODELS.map(([v, l]) => `<option value="${v}"${v === apiModel() ? " selected" : ""}>${l}</option>`).join("")}</select></div>
+        </div>
         <div class="row"><button class="btn" type="button" id="apiSave">Salvar</button>${has ? `<button class="btn line" type="button" id="apiDel">Remover chave</button>` : ""}</div>
-        <p class="small muted">A chave fica guardada só neste aparelho, no navegador, e vai direto para a Anthropic. Não use em aparelho de outra pessoa. Se perder o aparelho, apague a chave no console.</p>
+        <p class="small muted">A chave fica guardada só neste aparelho, no navegador, e vai direto para o Google ou a Anthropic. Não use em aparelho de outra pessoa.</p>
       </div>
     </details>`;
+  $("#provIn").onchange = () => { const g = $("#provIn").value === "gemini"; $("#provGem").hidden = !g; $("#provAnt").hidden = g; };
   $("#apiSave").onclick = () => {
-    const k = $("#apiKeyIn").value.trim();
+    const p = $("#provIn").value;
     try {
-      if (k) localStorage.setItem(KEY_API, k);
-      localStorage.setItem(KEY_MODEL, $("#apiModelIn").value);
+      localStorage.setItem(KEY_PROV, p);
+      if (p === "gemini") { const k = $("#gemKeyIn").value.trim(); if (k) localStorage.setItem(KEY_GEM, k); localStorage.setItem(KEY_GEMMODEL, $("#gemModelIn").value); }
+      else { const k = $("#apiKeyIn").value.trim(); if (k) localStorage.setItem(KEY_API, k); localStorage.setItem(KEY_MODEL, $("#apiModelIn").value); }
     } catch { toast("Este navegador não deixou salvar. Tente fora do modo anônimo."); return; }
-    if (!apiKey()) { toast("Cole a chave antes de salvar."); return; }
+    if (!(p === "gemini" ? gemKey() : apiKey())) { toast("Cole a chave antes de salvar."); renderKeyCard(true); return; }
     toast("Agente ligado"); renderKeyCard(false);
   };
   const del = $("#apiDel");
-  if (del) del.onclick = () => { try { localStorage.removeItem(KEY_API); } catch {} toast("Chave removida"); renderKeyCard(true); };
+  if (del) del.onclick = () => { try { localStorage.removeItem(prov === "gemini" ? KEY_GEM : KEY_API); } catch {} toast("Chave removida"); renderKeyCard(true); };
 }
 function agentUnavailable() {
   if (IS_PWA || !(window.claude && window.claude.use)) { renderKeyCard(false); return; }
@@ -24826,9 +24905,9 @@ function lcEspRender() {
     <p class="small muted">Análise de ${new Date(e.at).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })}. Futebol não é sorteio, mas também não é certeza: mesmo os melhores palpites erram vários jogos por rodada. Confira as marcações em “Seu volante” antes de jogar.</p>`;
 }
 $("#lcEsp").addEventListener("click", async () => {
-  if (!agentMode) { $("#lcEspMsg").textContent = "O especialista precisa do Claude: abra o app pelo Claude ou configure a chave da API (na aba Agente das outras loterias). Você também pode colar uma análise pronta, logo abaixo."; return; }
+  if (!agentMode) { $("#lcEspMsg").textContent = "O especialista precisa de uma inteligência ligada: abra o app pelo Claude, ou ligue a chave gratuita do Gemini na aba Agente de qualquer outra loteria. Você também pode colar uma análise pronta, logo abaixo."; return; }
   if (SL.jogos.some((j) => /^Mandante \d|^Visitante \d/.test(j.m + "|" + j.v) || /^Mandante \d/.test(j.m))) { $("#lcEspMsg").textContent = "Carregue primeiro os 14 jogos da rodada (Colar a programação)."; return; }
-  const web = agentMode === "api";
+  const web = agentMode === "api" || agentMode === "gemini";
   const btn = $("#lcEsp"); btn.disabled = true;
   btn.innerHTML = `<span class="spinner"></span> ${web ? "Pesquisando e analisando os jogos… (pode levar 1 a 2 minutos)" : "Analisando os jogos…"}`;
   $("#lcEspMsg").textContent = "";
@@ -24839,13 +24918,14 @@ $("#lcEsp").addEventListener("click", async () => {
   try {
     let r;
     try { r = await go(web); } catch (err) { if (web && err && err.code === "api_error") r = await go(false); else throw err; }
+    const comWeb = web && r.web !== false;
     const t = String(r.text || ""); const a = t.indexOf("{"), b = t.lastIndexOf("}");
     const obj = JSON.parse(t.slice(a, b + 1));
-    const n = lcEspAplicar(obj, web ? "pesquisa na web" : "conhecimento do modelo");
-    $("#lcEspMsg").textContent = `${n} jogos analisados e volante montado.${web ? "" : " Sem acesso à internet aqui: o especialista pode não saber de lesões, escalações ou da fase recente. Para uma análise com pesquisa, use o app pelo site com a chave da API, peça ao Claude no chat ou cole contexto acima."}`;
+    const n = lcEspAplicar(obj, comWeb ? "pesquisa na web" : "conhecimento do modelo");
+    $("#lcEspMsg").textContent = `${n} jogos analisados e volante montado.${comWeb ? "" : " Desta vez sem pesquisa na internet: o especialista pode não saber de lesões, escalações ou da fase recente. Cole notícias no campo de contexto acima, ou use a análise semanal pronta do Claude."}`;
     $("#lcEspOut").scrollIntoView({ behavior: "smooth", block: "start" });
   } catch (err) {
-    $("#lcEspMsg").textContent = err && err.code === "bad_key" ? "A chave da API foi recusada." : err && err.code === "no_credit" ? "A conta da API está sem créditos." : "Não consegui a análise agora. Tente de novo em instantes.";
+    $("#lcEspMsg").textContent = err && err.code === "bad_key" ? "A chave foi recusada. Confira na aba Agente." : err && err.code === "no_credit" ? "A conta da API está sem créditos." : err && err.code === "rate_limited" ? "Limite de pedidos do plano gratuito atingido. Espere um minuto e tente de novo." : "Não consegui a análise agora. Tente de novo em instantes." + (err && err.detail ? " Detalhe: " + err.detail : "");
   }
   btn.disabled = false; btn.textContent = "Analisar a rodada e montar o volante";
 });
