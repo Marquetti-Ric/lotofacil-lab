@@ -276,43 +276,64 @@
   }
   function clicarPagina(pg, n) { var el = pg.map[n]; if (!el) return false; (el.querySelector("a, button") || el).click(); return true; }
   async function esperarMudar(antes, max) {
-    for (var z = 0; z < (max || 50); z++) { await wait(200); var l = lerLinhas(); var k = l && l.length ? JSON.stringify(l[0]) + l.length : ""; if (k && k !== antes) return true; }
+    for (var z = 0; z < (max || 50); z++) { await wait(200); var k = assinatura(); if (k && k !== antes) { await wait(400); return true; } }
     return false;
   }
-  var assinatura = function () { var l = lerLinhas(); return l && l.length ? JSON.stringify(l[0]) + l.length : ""; };
+  var assinatura = function () { var l = lerLinhas(); return l && l.length ? JSON.stringify(l) : ""; };
+  var estado = null; // guarda o que já foi conferido, para continuar de onde parou
+  function irPara(pg, n) {
+    if (clicarPagina(pg, n)) return true;
+    var seta = Array.prototype.filter.call(document.querySelectorAll("a, li, button"), function (e) { return vis(e) && /^(»|›)$/.test((e.innerText || "").trim()); })[0];
+    if (seta && n === (pg.atual || 0) + 1) { seta.click(); return true; }
+    return false;
+  }
   async function conferirPremios() {
     if (!naApostas()) { log("Abra \"Minha Conta\" → \"Minhas Apostas\" (a lista com a coluna Situação) e toque de novo em Conferir prêmios."); return; }
     if (!tabelaApostas()) { log("Não achei a tabela de apostas. Toque em Aplicar nos filtros para a lista aparecer e tente de novo."); return; }
     $(".premios").disabled = true; $(".parar").hidden = false; parar = false;
     log("Conferindo as apostas… (só leitura: não clico em resgatar nem em nada de pagamento)");
-    var pg = paginacao();
-    if (pg && pg.atual !== 1 && pg.map[1]) { var a0 = assinatura(); clicarPagina(pg, 1); await esperarMudar(a0, pg.atual === null ? 15 : 50); pg = paginacao(); }
-    var totalPg = pg ? pg.total : 1, todas = [], vistas = {}, pagina = 1;
-    while (!parar) {
+    var pg = paginacao(), continuar = estado && estado.hash === location.hash && estado.parou;
+    var todas = continuar ? estado.todas : [], vistas = continuar ? estado.vistas : {}, pagina = 1;
+    var alvoIni = continuar ? estado.parou : 1;
+    if (continuar) log("Continuando da página " + alvoIni + " (já tenho " + todas.length + " apostas conferidas).");
+    if (pg && pg.atual !== alvoIni && pg.map[alvoIni]) { var a0 = assinatura(); clicarPagina(pg, alvoIni); await esperarMudar(a0, pg.atual === null && alvoIni === 1 ? 15 : 150); pg = paginacao(); }
+    else if (continuar && !(pg && pg.atual === alvoIni)) { log("Não achei o botão da página " + alvoIni + ". Vou recomeçar da página 1."); todas = []; vistas = {}; alvoIni = 1; }
+    pagina = alvoIni;
+    var totalPg = pg ? pg.total : 1;
+    estado = { hash: location.hash, todas: todas, vistas: vistas, parou: null };
+    while (true) {
+      if (parar) { estado.parou = pagina; break; }
       var linhas = lerLinhas() || [];
       linhas.forEach(function (r) { var k = JSON.stringify(r); if (!vistas[k]) { vistas[k] = 1; r.pagina = pagina; todas.push(r); } });
       barra.style.width = (pagina / totalPg) * 100 + "%";
       if (pagina % 10 === 0) log("Página " + pagina + " de " + totalPg + "…");
       pg = paginacao();
       if (!pg || pagina >= pg.total) break;
-      var antes = assinatura();
-      if (!clicarPagina(pg, pagina + 1)) {
-        // números de página escondidos: tenta a seta »
-        var seta = Array.prototype.filter.call(document.querySelectorAll("a, li, button"), function (e) { return vis(e) && /^(»|›)$/.test((e.innerText || "").trim()); })[0];
-        if (!seta) { log("Não consegui ir para a página " + (pagina + 1) + ". Parei aqui."); break; }
-        seta.click();
+      var antes = assinatura(), foi = false;
+      for (var tent = 0; tent < 3 && !foi && !parar; tent++) {
+        pg = paginacao();
+        if (!pg || !irPara(pg, pagina + 1)) { await wait(1500); continue; }
+        foi = await esperarMudar(antes, tent === 0 ? 75 : 100); // até 15 s e depois 20 s por tentativa
+        if (!foi && tent < 2) log("A página " + (pagina + 1) + " está demorando… tentando de novo.");
       }
-      if (!(await esperarMudar(antes))) { log("A página " + (pagina + 1) + " não carregou. Parei aqui (conferi " + pagina + " de " + totalPg + ")."); break; }
+      if (parar) { estado.parou = pagina + 1; break; }
+      if (!foi) {
+        estado.parou = pagina + 1;
+        log("A página " + (pagina + 1) + " não carregou (conferi " + pagina + " de " + totalPg + "). O site da Caixa pode estar lento. Espere um pouco e toque de novo em Conferir prêmios: eu continuo da página " + (pagina + 1) + " sem perder o que já vi.");
+        break;
+      }
       pagina++;
     }
     $(".premios").disabled = false; $(".parar").hidden = true;
+    if (estado.parou) $(".premios").textContent = "Continuar conferência (da página " + estado.parou + ")";
+    else $(".premios").textContent = "Conferir prêmios não resgatados";
     var grupos = { premio: [], resgatado: [], aguardando: [], nao: [], cancelada: [], outra: [] };
     todas.forEach(function (r) { grupos[classificar(r.sit)].push(r); });
     var linha = function (r) { return "• " + r.data + " · " + r.mod + " · conc. " + r.concurso + " · " + r.aposta + "\n   Situação: " + r.sit + " (pág. " + r.pagina + ")"; };
-    var rel = "Conferi " + todas.length + " apostas em " + pagina + " página(s).\n" +
+    var rel = (estado.parou ? "RESULTADO PARCIAL (faltam páginas a partir da " + estado.parou + "). " : "") + "Conferi " + todas.length + " apostas" + (estado.parou ? "" : " em " + pagina + " página(s)") + ".\n" +
       "Não premiadas: " + grupos.nao.length + " · aguardando sorteio: " + grupos.aguardando.length + " · já resgatadas/pagas: " + grupos.resgatado.length + (grupos.cancelada.length ? " · canceladas: " + grupos.cancelada.length : "");
     if (grupos.premio.length) rel += "\n\n⚠️ PREMIADAS SEM RESGATE CONFIRMADO (" + grupos.premio.length + "):\n" + grupos.premio.map(linha).join("\n");
-    else rel += "\n\n✅ Nenhuma aposta premiada pendente de resgate nesta lista.";
+    else rel += estado.parou ? "\n\nAté aqui, nenhuma premiada pendente. Faltam páginas: toque em Continuar." : "\n\n✅ Nenhuma aposta premiada pendente de resgate nesta lista.";
     if (grupos.outra.length) rel += "\n\nSituação que não reconheci (" + grupos.outra.length + "), confira:\n" + grupos.outra.slice(0, 15).map(linha).join("\n");
     rel += "\n\nAtenção: só confiro o período escolhido no filtro da Caixa. Para ver mais tempo, troque o período, toque em Aplicar e confira de novo. O resgate é feito por você.";
     log(rel);
