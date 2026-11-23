@@ -213,6 +213,112 @@
     return d;
   }
 
+
+  /* ---------- Conferir prêmios em "Minhas apostas" (só leitura: nunca clica em resgatar) ---------- */
+  function naApostas() { return /#\/apostas\b/i.test(location.hash) || /Para visualizar os n[uú]meros acertados/i.test(txt()); }
+  function tabelaApostas() {
+    var tabs = document.querySelectorAll("table");
+    for (var i = 0; i < tabs.length; i++) {
+      var th = norm(tabs[i].innerText.slice(0, 400));
+      if (/SITUACAO/.test(th) && /MODALIDADE/.test(th)) return tabs[i];
+    }
+    return null;
+  }
+  function lerLinhas() {
+    var t = tabelaApostas(); if (!t) return null;
+    var heads = Array.prototype.map.call(t.querySelectorAll("tr:first-child th, thead th"), function (h) { return norm(h.innerText); });
+    var col = function (re, d) { for (var i = 0; i < heads.length; i++) if (re.test(heads[i])) return i; return d; };
+    var cData = col(/DATA/, 0), cMod = col(/MODALIDADE/, 1), cAp = col(/APOSTA/, 2), cCon = col(/CONCURSO/, 3), cSit = col(/SITUACAO/, 4);
+    var out = [];
+    Array.prototype.forEach.call(t.querySelectorAll("tr"), function (tr) {
+      var td = tr.querySelectorAll("td"); if (td.length < 4) return;
+      var g = function (k) { return td[k] ? td[k].innerText.replace(/\s+/g, " ").trim() : ""; };
+      out.push({ data: g(cData), mod: g(cMod), aposta: (g(cAp).match(/\d{1,2}/g) || []).join(" "), concurso: g(cCon), sit: g(cSit) });
+    });
+    return out;
+  }
+  function classificar(sit) {
+    var n = norm(sit);
+    if (!n) return "outra";
+    if (/NAO PREMIAD/.test(n)) return "nao";
+    if (/AGUARD|PENDENTE|EM PROCESS|A SORTEAR|NAO SORTEAD|EM ANDAMENTO/.test(n)) return "aguardando";
+    if (/CANCELAD|ESTORNAD|DEVOLVID/.test(n)) return "cancelada";
+    if (/RESGATAD|PAGO|CREDITAD|TRANSFERID|RECEBID/.test(n)) return "resgatado";
+    if (/PREMIAD|PREMIO|RESGAT|R\$/.test(n)) return "premio";
+    return "outra";
+  }
+  function paginacao() {
+    var setas = Array.prototype.filter.call(document.querySelectorAll("a, li, button, span"), function (e) { return vis(e) && /^(»|›|>>|Próxima)$/i.test((e.innerText || "").trim()); });
+    var cont = null;
+    for (var i = 0; i < setas.length && !cont; i++) {
+      var c = setas[i].parentElement;
+      for (var k = 0; k < 4 && c; k++, c = c.parentElement) {
+        var nums = Array.prototype.filter.call(c.querySelectorAll("a, li, button, span"), function (e) { return /^\d+$/.test((e.innerText || "").trim()); });
+        if (nums.length >= 2) { cont = c; break; }
+      }
+    }
+    if (!cont) return null;
+    var map = {};
+    Array.prototype.forEach.call(cont.querySelectorAll("a, button, li, span"), function (e) {
+      var t = (e.innerText || "").trim(); if (!/^\d+$/.test(t)) return;
+      var up = e; while (up.parentElement && up.parentElement !== cont && (up.parentElement.innerText || "").trim() === t) up = up.parentElement;
+      if (!map[t]) map[t] = up;
+    });
+    var ks = Object.keys(map).map(Number);
+    var atual = null;
+    ks.forEach(function (n) { var el = map[n]; if (atual === null && (/(^|\s)(active|ativo|current|selected|atual)(\s|$)/i.test(cls(el) + " " + Array.prototype.map.call(el.querySelectorAll("*"), cls).join(" ")) || el.getAttribute("aria-current"))) atual = n; });
+    if (atual === null) {
+      var pesos = {}; ks.forEach(function (n) { pesos[n] = parseInt(getComputedStyle(map[n].querySelector("a, button") || map[n]).fontWeight, 10) || 400; });
+      var mx = Math.max.apply(null, ks.map(function (n) { return pesos[n]; })), mn = Math.min.apply(null, ks.map(function (n) { return pesos[n]; }));
+      if (mx > mn) ks.forEach(function (n) { if (atual === null && pesos[n] === mx) atual = n; });
+    }
+    return { map: map, total: Math.max.apply(null, ks), atual: atual };
+  }
+  function clicarPagina(pg, n) { var el = pg.map[n]; if (!el) return false; (el.querySelector("a, button") || el).click(); return true; }
+  async function esperarMudar(antes, max) {
+    for (var z = 0; z < (max || 50); z++) { await wait(200); var l = lerLinhas(); var k = l && l.length ? JSON.stringify(l[0]) + l.length : ""; if (k && k !== antes) return true; }
+    return false;
+  }
+  var assinatura = function () { var l = lerLinhas(); return l && l.length ? JSON.stringify(l[0]) + l.length : ""; };
+  async function conferirPremios() {
+    if (!naApostas()) { log("Abra \"Minha Conta\" → \"Minhas Apostas\" (a lista com a coluna Situação) e toque de novo em Conferir prêmios."); return; }
+    if (!tabelaApostas()) { log("Não achei a tabela de apostas. Toque em Aplicar nos filtros para a lista aparecer e tente de novo."); return; }
+    $(".premios").disabled = true; $(".parar").hidden = false; parar = false;
+    log("Conferindo as apostas… (só leitura: não clico em resgatar nem em nada de pagamento)");
+    var pg = paginacao();
+    if (pg && pg.atual !== 1 && pg.map[1]) { var a0 = assinatura(); clicarPagina(pg, 1); await esperarMudar(a0, pg.atual === null ? 15 : 50); pg = paginacao(); }
+    var totalPg = pg ? pg.total : 1, todas = [], vistas = {}, pagina = 1;
+    while (!parar) {
+      var linhas = lerLinhas() || [];
+      linhas.forEach(function (r) { var k = JSON.stringify(r); if (!vistas[k]) { vistas[k] = 1; r.pagina = pagina; todas.push(r); } });
+      barra.style.width = (pagina / totalPg) * 100 + "%";
+      if (pagina % 10 === 0) log("Página " + pagina + " de " + totalPg + "…");
+      pg = paginacao();
+      if (!pg || pagina >= pg.total) break;
+      var antes = assinatura();
+      if (!clicarPagina(pg, pagina + 1)) {
+        // números de página escondidos: tenta a seta »
+        var seta = Array.prototype.filter.call(document.querySelectorAll("a, li, button"), function (e) { return vis(e) && /^(»|›)$/.test((e.innerText || "").trim()); })[0];
+        if (!seta) { log("Não consegui ir para a página " + (pagina + 1) + ". Parei aqui."); break; }
+        seta.click();
+      }
+      if (!(await esperarMudar(antes))) { log("A página " + (pagina + 1) + " não carregou. Parei aqui (conferi " + pagina + " de " + totalPg + ")."); break; }
+      pagina++;
+    }
+    $(".premios").disabled = false; $(".parar").hidden = true;
+    var grupos = { premio: [], resgatado: [], aguardando: [], nao: [], cancelada: [], outra: [] };
+    todas.forEach(function (r) { grupos[classificar(r.sit)].push(r); });
+    var linha = function (r) { return "• " + r.data + " · " + r.mod + " · conc. " + r.concurso + " · " + r.aposta + "\n   Situação: " + r.sit + " (pág. " + r.pagina + ")"; };
+    var rel = "Conferi " + todas.length + " apostas em " + pagina + " página(s).\n" +
+      "Não premiadas: " + grupos.nao.length + " · aguardando sorteio: " + grupos.aguardando.length + " · já resgatadas/pagas: " + grupos.resgatado.length + (grupos.cancelada.length ? " · canceladas: " + grupos.cancelada.length : "");
+    if (grupos.premio.length) rel += "\n\n⚠️ PREMIADAS SEM RESGATE CONFIRMADO (" + grupos.premio.length + "):\n" + grupos.premio.map(linha).join("\n");
+    else rel += "\n\n✅ Nenhuma aposta premiada pendente de resgate nesta lista.";
+    if (grupos.outra.length) rel += "\n\nSituação que não reconheci (" + grupos.outra.length + "), confira:\n" + grupos.outra.slice(0, 15).map(linha).join("\n");
+    rel += "\n\nAtenção: só confiro o período escolhido no filtro da Caixa. Para ver mais tempo, troque o período, toque em Aplicar e confira de novo. O resgate é feito por você.";
+    log(rel);
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(rel).catch(function () {});
+  }
+
   /* ---------- Painel ---------- */
   var css = "#lflab-robo{position:fixed;z-index:2147483647;right:16px;bottom:16px;width:min(390px,calc(100vw - 32px));max-height:calc(100vh - 32px);overflow:auto;background:#fff;color:#1a1830;border-radius:14px;box-shadow:0 12px 40px rgba(0,0,0,.35);font:14px/1.45 system-ui,-apple-system,Segoe UI,sans-serif;padding:14px;display:grid;gap:10px}" +
     "#lflab-robo h3{margin:0;font-size:16px}#lflab-robo textarea{width:100%;box-sizing:border-box;min-height:120px;font:12px ui-monospace,Menlo,monospace;border:1px solid #ccc;border-radius:8px;padding:8px}" +
@@ -226,7 +332,7 @@
   box.innerHTML = "<style>" + css + "</style><button class='x' title='Fechar'>×</button>" +
     "<h3>Robô do Lotofácil Lab</h3><div class='row'><span>Modalidade:</span><select class='modal'>" + opts + "</select><span class='jogo small'></span></div>" +
     "<textarea placeholder='Cole aqui os jogos, um por linha.\nEx.: 01 02 05 07 09 10 13 14 16 18 20 22 23 24 25'></textarea>" +
-    "<div class='row'><button class='sec colar'>Colar</button><button class='go ir'>Colocar no carrinho</button><button class='sec parar' hidden>Parar</button><button class='sec diag'>Diagnóstico</button></div>" +
+    "<div class='row'><button class='sec colar'>Colar</button><button class='go ir'>Colocar no carrinho</button><button class='sec parar' hidden>Parar</button><button class='sec diag'>Diagnóstico</button></div><div class='row'><button class='go premios' style='background:#19794a'>Conferir prêmios não resgatados</button></div>" +
     "<div class='bar'><i></i></div><div class='log'>Entre na sua conta, abra a página da modalidade e cole os jogos. O robô só monta o carrinho: a conferência e o pagamento são seus.</div>";
   document.body.appendChild(box);
   var $ = function (s) { return box.querySelector(s); };
@@ -247,6 +353,7 @@
     if (!navigator.clipboard || !navigator.clipboard.readText) { log("Este navegador não deixa colar por aqui. Use Ctrl+V (ou Cmd+V) na caixa."); return; }
     navigator.clipboard.readText().then(function (t) { $("textarea").value = t; }).catch(function () { log("Não consegui ler a área de transferência. Clique na caixa e use Ctrl+V (ou Cmd+V)."); });
   };
+  $(".premios").onclick = function () { conferirPremios(); };
   $(".diag").onclick = function () {
     var s = JSON.stringify(diagnostico(), null, 1);
     log("Diagnóstico (copiado; cole na conversa do Claude):\n" + s);
