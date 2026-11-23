@@ -199,6 +199,16 @@ body[data-game="tm"] .cell.fix::after { padding: 2px 3px; font-size: 8px; }
 .lc-edit input { min-width: 0; padding: 6px 8px; border-radius: 8px; border: 1px solid var(--line); background: var(--sunk); font-size: 13px; }
 .lc-nota { grid-column: 1 / -1; font-size: 12px; color: var(--muted); }
 .lc-conc { width: 70px; padding: 4px 6px; border-radius: 8px; border: 1px solid var(--line); background: var(--sunk); }
+.lc-esp { display: grid; gap: 2px; margin: 8px 0; }
+.lc-esp-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: start; padding: 9px 0; border-top: 1px solid var(--line); }
+.lc-esp-row:first-child { border-top: 0; }
+.lc-esp-row .idx { color: var(--muted); font-size: 12px; }
+.lc-esp-row b { font-weight: 600; }
+.lc-esp-row .small { margin-top: 2px; }
+.lc-tag { display: grid; justify-items: center; min-width: 58px; padding: 6px 8px; border-radius: 10px; font-weight: 800; font-size: 16px; background: var(--accent); color: var(--accent-ink); line-height: 1.1; }
+.lc-tag small { font-weight: 500; font-size: 10px; opacity: .85; }
+.lc-tag.duplo { background: #d97706; }
+.lc-tag.triplo { background: #7c2d12; }
 .lc-vol { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; line-height: 1.5; white-space: pre-wrap; background: var(--sunk); border-radius: 10px; padding: 10px; max-height: 320px; overflow: auto; }
 body[data-game="lc"] { --accent: #b45309; --accent-soft: #fdecd3; }
 body[data-game="lc"] #tabs { display: none; }
@@ -521,15 +531,34 @@ body[data-game="lc"] #tabs { display: none; }
       <div id="lcRows" class="lc-rows"></div>
     </div>
 
+    <div class="card" id="lcEspCard">
+      <div class="row between"><h2>Especialista em futebol</h2><span class="pill" id="lcEspPill" hidden></span></div>
+      <p class="small">Analisa os 14 jogos (força dos times, momento, mando de campo, tabela, motivação, desfalques e cotações) e define o palpite de cada um. Depois o app monta o volante dentro do seu orçamento, com duplos e triplos onde o especialista vê mais incerteza.</p>
+      <p class="small muted" id="lcEspBudget"></p>
+      <details>
+        <summary class="small">Contexto da rodada (opcional)</summary>
+        <p class="small muted">Cole o que souber e ele vai considerar: tabela, desfalques, escalações, cotações, notícias.</p>
+        <textarea id="lcCtx" rows="4" placeholder="Ex.: Flamengo sem Arrascaeta; Palmeiras precisa vencer para seguir na briga pelo título…"></textarea>
+      </details>
+      <button class="btn wide" type="button" id="lcEsp">Analisar a rodada e montar o volante</button>
+      <p class="small muted" id="lcEspMsg"></p>
+      <div id="lcEspOut"></div>
+      <details>
+        <summary class="small">Colar uma análise pronta</summary>
+        <p class="small muted">Para usar uma análise feita pelo Claude no chat, com pesquisa completa na internet. Cole o bloco inteiro (começa com “{”).</p>
+        <textarea id="lcEspPaste" rows="5"></textarea>
+        <div class="row"><button class="btn" type="button" id="lcEspPasteOk">Usar esta análise</button><span class="small muted" id="lcEspPasteMsg"></span></div>
+      </details>
+    </div>
+
     <div class="card" id="lcResumo"></div>
 
     <div class="card">
       <h2>Avaliação dos jogos</h2>
-      <p class="small">As porcentagens de cada jogo são a base de tudo. Use a sua opinião (modo Avaliar), as cotações das casas de aposta (o jeito mais confiável de saber o que o mercado espera) ou peça ao agente.</p>
+      <p class="small">As porcentagens de cada jogo são a base de tudo. Use o especialista (acima), a sua opinião (modo Avaliar) ou as cotações das casas de aposta (o jeito mais confiável de saber o que o mercado espera).</p>
       <div class="row">
         <button class="btn line" type="button" id="lcBase">Fator campo</button>
         <button class="btn line" type="button" id="lcIgual">Tudo igual (33%)</button>
-        <button class="btn line" type="button" id="lcAgente">Pedir ao agente</button>
       </div>
       <details>
         <summary class="small">Colar cotações (odds)</summary>
@@ -24445,18 +24474,19 @@ const MODELS = [["claude-sonnet-5-5", "Sonnet (recomendado)"], ["claude-haiku-5-
 const apiKey = () => { try { return localStorage.getItem(KEY_API) || ""; } catch { return ""; } };
 const apiModel = () => { try { return localStorage.getItem(KEY_MODEL) || MODELS[0][0]; } catch { return MODELS[0][0]; } };
 // Mesmo formato do sample do Claude: recebe turnos, roda as ferramentas da página e devolve { text }
-async function apiSample(turns, { tools = [], signal, onText } = {}) {
+async function apiSample(turns, { tools = [], signal, onText, webSearch = false, maxTokens = 1500 } = {}) {
   const system = turns[0].content;
   const messages = turns.slice(1).map((t) => ({ role: t.role, content: t.content }));
   const toolDefs = tools.map((t) => ({ name: t.name, description: t.description, input_schema: t.inputSchema || { type: "object", properties: {} } }));
+  if (webSearch) toolDefs.push({ type: "web_search_20250305", name: "web_search", max_uses: 12 });
   let all = "";
-  for (let round = 0; round < 6; round++) {
+  for (let round = 0; round < (webSearch ? 10 : 6); round++) {
     let res;
     try {
       res = await fetch("https://api.anthropic.com/v1/messages", {
         method: "POST", signal,
         headers: { "content-type": "application/json", "x-api-key": apiKey(), "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" },
-        body: JSON.stringify({ model: apiModel(), max_tokens: 1500, system, messages, tools: toolDefs }),
+        body: JSON.stringify({ model: apiModel(), max_tokens: maxTokens, system, messages, tools: toolDefs }),
       });
     } catch (e) { throw { code: signal && signal.aborted ? "cancelled" : "network", text: all }; }
     if (!res.ok) {
@@ -24466,6 +24496,7 @@ async function apiSample(turns, { tools = [], signal, onText } = {}) {
     const data = await res.json();
     const text = (data.content || []).filter((b) => b.type === "text").map((b) => b.text).join("");
     if (text.trim()) { all += (all ? "\n\n" : "") + text.trim(); onText && onText({ text: all }); }
+    if (data.stop_reason === "pause_turn") { messages.push({ role: "assistant", content: data.content }); continue; } // pesquisa na web ainda em andamento
     if (data.stop_reason !== "tool_use") return { text: all || "Pronto." };
     messages.push({ role: "assistant", content: data.content });
     const results = [];
@@ -24480,7 +24511,7 @@ async function apiSample(turns, { tools = [], signal, onText } = {}) {
   return { text: all };
 }
 let agentMode = null; // "claude" | "api" | null
-function runAgent(turns, opts) { return agentMode === "claude" ? sample(turns, { cache: false, ...opts }) : apiSample(turns, opts); }
+function runAgent(turns, opts = {}) { const { webSearch, maxTokens, ...rest } = opts; return agentMode === "claude" ? sample(turns, { cache: false, ...rest }) : apiSample(turns, opts); }
 
 async function askAgent() {
   const q = $("#ask").value.trim();
@@ -24708,8 +24739,8 @@ function enterLoteca() {
   $("#v-loteca").hidden = false;
   $("#lcConc").value = SL.concurso || ""; $("#lcBudget").value = SL.budget;
   document.querySelectorAll("#lcMode button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.m === lcMode)));
-  lcChips(); lcPaint(); lcSaved();
-  $("#lcAgMsg").textContent = agentMode ? "" : "O agente fica disponível quando o app está aberto no Claude ou com a chave da API configurada (em Dados, nas outras loterias).";
+  lcChips(); lcPaint(); lcSaved(); lcEspRender();
+  $("#lcAgMsg").textContent = "";
   window.scrollTo(0, 0);
 }
 function leaveLoteca() { $("#v-loteca").hidden = true; $("#btnDados").hidden = false; }
@@ -24745,28 +24776,96 @@ $("#lcOddsOk").addEventListener("click", () => {
   ps.forEach((p, i) => { SL.P[i] = p.map((x) => Math.round(x * 100)); SL.notas[i] = "pelas cotações"; });
   lcSave(); lcPaint(); $("#lcOddsMsg").textContent = `${ps.length} ${ps.length === 1 ? "jogo atualizado" : "jogos atualizados"}${ps.length < 14 ? " (os outros ficaram como estavam)" : ""}.`;
 });
-$("#lcAgente").addEventListener("click", async () => {
-  if (!agentMode) { $("#lcAgMsg").textContent = "O agente não está disponível aqui. Abra o app pelo Claude ou configure a chave da API em Dados."; return; }
-  const btn = $("#lcAgente"); btn.disabled = true; btn.innerHTML = `<span class="spinner"></span> Avaliando…`;
+/* ---------- Especialista em futebol ---------- */
+const LC_PALP = { "1": [1, 0, 0], "X": [0, 1, 0], "2": [0, 0, 1], "1X": [1, 1, 0], "X2": [0, 1, 1], "12": [1, 0, 1], "1X2": [1, 1, 1] };
+const marksTxt = (m) => [0, 1, 2].filter((c) => m[c]).map((c) => LC.COLS[c]).join("");
+const tipoTxt = (m) => { const n = LC.count(m); return n === 3 ? "triplo" : n === 2 ? "duplo" : "seco"; };
+function lcEspPrompt(web) {
+  return `Você é um especialista em futebol (Brasileirão, futebol sul-americano e as grandes ligas europeias) que preenche a Loteca para um apostador brasileiro. Na Loteca vale o resultado do tempo normal (90 minutos + acréscimos; prorrogação e pênaltis não contam). Coluna 1 = vitória do mandante, coluna do meio (X) = empate, coluna 2 = vitória do visitante.
+${web ? "PESQUISE na web antes de responder (use a ferramenta de busca): classificação atual, últimos 5 jogos de cada time, desfalques e escalações prováveis, motivação (título, vaga, rebaixamento, final, poupar titulares) e cotações 1X2 das casas de aposta. As cotações são a melhor referência do mercado: parta delas e ajuste pelo que a pesquisa mostrar." : "Você não tem acesso à internet: use o que sabe e o contexto informado pelo usuário. Quando não tiver informação recente sobre um time, seja conservador (perto do fator campo 46/28/26) e diga isso na análise."}
+Para cada jogo dê: probabilidades em % de 1, X e 2 (somando 100), o palpite (um de: 1, X, 2, 1X, X2, 12, 1X2 — seco quando há favorito claro, duplo quando há dúvida entre dois resultados, triplo quando é imprevisível), a confiança (alta, média ou baixa) e uma análise de até 35 palavras com os motivos concretos.
+Responda APENAS com JSON válido, sem nada fora dele:
+{"resumo":"até 60 palavras sobre a rodada","fonte":"${web ? "pesquisa na web" : "conhecimento do modelo"}","jogos":[{"j":1,"p":[45,28,27],"palpite":"1X","confianca":"média","analise":"..."}]}
+Os 14 jogos, na ordem.`;
+}
+function lcEspAplicar(obj, origem) {
+  const arr = Array.isArray(obj) ? obj : obj && obj.jogos;
+  if (!Array.isArray(arr)) throw new Error("formato");
+  const jogos = [];
+  for (const x of arr) {
+    const i = (+x.j || 0) - 1; if (i < 0 || i >= 14 || !Array.isArray(x.p) || x.p.length !== 3) continue;
+    SL.P[i] = x.p.map((v) => Math.max(0, Math.round(+v || 0)));
+    const palp = String(x.palpite || "").toUpperCase().replace(/\s/g, "").replace("21", "12").replace("2X", "X2").replace("X1", "1X");
+    jogos.push({ j: i + 1, palpite: LC_PALP[palp] ? palp : "", confianca: String(x.confianca || ""), analise: String(x.analise || x.nota || "").slice(0, 300) });
+    SL.notas[i] = `Especialista${x.confianca ? " (confiança " + x.confianca + ")" : ""}: ${String(x.analise || x.nota || "").slice(0, 160)}`;
+  }
+  if (!jogos.length) throw new Error("vazio");
+  // volante pelo orçamento, com as probabilidades do especialista
+  const o = LC.otimizar(lcP(), +SL.budget || 4);
+  if (o) SL.marks = o.marks;
+  SL.esp = { at: Date.now(), origem, resumo: String((obj && obj.resumo) || ""), fonte: String((obj && obj.fonte) || origem), jogos, budget: +SL.budget || 4 };
+  lcSave(); lcPaint(); lcEspRender();
+  return jogos.length;
+}
+function lcEspRender() {
+  $("#lcEspBudget").textContent = `Orçamento usado para montar o volante: ${brl(+SL.budget || 4)} (muda em “Montar pelo orçamento”, mais abaixo).`;
+  const e = SL.esp, out = $("#lcEspOut"), pill = $("#lcEspPill");
+  if (!e || !e.jogos || !e.jogos.length) { out.innerHTML = ""; pill.hidden = true; return; }
+  pill.hidden = false; pill.textContent = e.fonte || "";
+  const P = lcP(), ch = LC.chances(P, SL.marks), ck = LC.check(SL.marks);
+  const byJ = {}; e.jogos.forEach((g) => (byJ[g.j] = g));
+  out.innerHTML = `${e.resumo ? `<div class="note">${esc(e.resumo)}</div>` : ""}
+    <div class="lc-esp">${SL.jogos.map((jg, i) => {
+      const g = byJ[i + 1] || {}, m = SL.marks[i];
+      return `<div class="lc-esp-row"><div><span class="idx">${String(i + 1).padStart(2, "0")}</span> <b>${esc(jg.m)}</b> x <b>${esc(jg.v)}</b>
+        <div class="small muted">${P[i].map((x, c) => LC.COLS[c] + " " + Math.round(x * 100) + "%").join(" · ")}${g.confianca ? " · confiança " + esc(g.confianca) : ""}${g.palpite && g.palpite !== marksTxt(m) ? " · especialista sugeriu " + esc(g.palpite) : ""}</div>
+        ${g.analise ? `<div class="small">${esc(g.analise)}</div>` : ""}</div>
+        <span class="lc-tag ${tipoTxt(m)}">${marksTxt(m)}<small>${tipoTxt(m)}</small></span></div>`;
+    }).join("")}</div>
+    <p class="small">Volante montado: ${ck.d} ${ck.d === 1 ? "duplo" : "duplos"} e ${ck.t} ${ck.t === 1 ? "triplo" : "triplos"} · ${brl(LC.cost(SL.marks))} · chance de 14, pela análise: ${pctTxt(ch.p14)} · de 13: ${pctTxt(ch.p13)}.</p>
+    <p class="small muted">Análise de ${new Date(e.at).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })}. Futebol não é sorteio, mas também não é certeza: mesmo os melhores palpites erram vários jogos por rodada. Confira as marcações em “Seu volante” antes de jogar.</p>`;
+}
+$("#lcEsp").addEventListener("click", async () => {
+  if (!agentMode) { $("#lcEspMsg").textContent = "O especialista precisa do Claude: abra o app pelo Claude ou configure a chave da API (na aba Agente das outras loterias). Você também pode colar uma análise pronta, logo abaixo."; return; }
+  if (SL.jogos.some((j) => /^Mandante \d|^Visitante \d/.test(j.m + "|" + j.v) || /^Mandante \d/.test(j.m))) { $("#lcEspMsg").textContent = "Carregue primeiro os 14 jogos da rodada (Colar a programação)."; return; }
+  const web = agentMode === "api";
+  const btn = $("#lcEsp"); btn.disabled = true;
+  btn.innerHTML = `<span class="spinner"></span> ${web ? "Pesquisando e analisando os jogos… (pode levar 1 a 2 minutos)" : "Analisando os jogos…"}`;
+  $("#lcEspMsg").textContent = "";
   const lista = SL.jogos.map((j, i) => `${i + 1}. ${j.m} x ${j.v}`).join("\n");
-  const sys = `Você é um analista de futebol brasileiro e internacional ajudando a preencher a Loteca. Para cada jogo, estime a probabilidade (em %) de vitória do mandante (coluna 1), empate (coluna do meio) e vitória do visitante (coluna 2), considerando força dos elencos, momento, mando de campo, tabela e o que mais souber. Seu conhecimento pode estar desatualizado: quando não tiver informação recente ou não conhecer um time, fique perto do fator campo (46/28/26) e diga isso na nota. Responda APENAS com JSON, sem texto fora dele, no formato [{"j":1,"p":[50,27,23],"nota":"até 12 palavras"}], com os 14 jogos.`;
+  const ctx = $("#lcCtx").value.trim();
+  const pedido = `Jogos da Loteca${SL.concurso ? " (concurso " + SL.concurso + ")" : ""}, hoje é ${new Date().toLocaleDateString("pt-BR")}:\n${lista}${ctx ? "\n\nContexto informado pelo usuário:\n" + ctx : ""}`;
+  const go = (w) => runAgent([{ role: "user", content: lcEspPrompt(w) }, { role: "user", content: pedido }], { webSearch: w, maxTokens: 6000, modelTier: "complex" });
   try {
-    const r = await runAgent([{ role: "user", content: sys }, { role: "user", content: `Jogos da Loteca${SL.concurso ? " (concurso " + SL.concurso + ")" : ""}:\n${lista}` }], {});
-    const t = String(r.text || ""); const a = t.indexOf("["), b = t.lastIndexOf("]");
-    const arr = JSON.parse(t.slice(a, b + 1));
-    let n = 0;
-    for (const x of arr) { const i = (+x.j || 0) - 1; if (i >= 0 && i < 14 && Array.isArray(x.p) && x.p.length === 3) { SL.P[i] = x.p.map((v) => Math.max(0, Math.round(+v || 0))); SL.notas[i] = "Agente: " + String(x.nota || "").slice(0, 120); n++; } }
-    lcSave(); lcPaint();
-    $("#lcAgMsg").textContent = `O agente avaliou ${n} jogos. Revise no modo Avaliar: ele pode não saber de lesões, escalações ou fase recente.`;
-  } catch (e) { $("#lcAgMsg").textContent = "Não consegui a avaliação do agente agora. Tente de novo ou use as cotações."; }
-  btn.disabled = false; btn.textContent = "Pedir ao agente";
+    let r;
+    try { r = await go(web); } catch (err) { if (web && err && err.code === "api_error") r = await go(false); else throw err; }
+    const t = String(r.text || ""); const a = t.indexOf("{"), b = t.lastIndexOf("}");
+    const obj = JSON.parse(t.slice(a, b + 1));
+    const n = lcEspAplicar(obj, web ? "pesquisa na web" : "conhecimento do modelo");
+    $("#lcEspMsg").textContent = `${n} jogos analisados e volante montado.${web ? "" : " Sem acesso à internet aqui: o especialista pode não saber de lesões, escalações ou da fase recente. Para uma análise com pesquisa, use o app pelo site com a chave da API, peça ao Claude no chat ou cole contexto acima."}`;
+    $("#lcEspOut").scrollIntoView({ behavior: "smooth", block: "start" });
+  } catch (err) {
+    $("#lcEspMsg").textContent = err && err.code === "bad_key" ? "A chave da API foi recusada." : err && err.code === "no_credit" ? "A conta da API está sem créditos." : "Não consegui a análise agora. Tente de novo em instantes.";
+  }
+  btn.disabled = false; btn.textContent = "Analisar a rodada e montar o volante";
+});
+$("#lcEspPasteOk").addEventListener("click", () => {
+  const t = $("#lcEspPaste").value; const a = t.indexOf("{") >= 0 ? t.indexOf("{") : t.indexOf("["), b = Math.max(t.lastIndexOf("}"), t.lastIndexOf("]"));
+  try {
+    const obj = JSON.parse(t.slice(a, b + 1));
+    if (obj && Array.isArray(obj.programacao) && obj.programacao.length === 14) { obj.programacao.forEach((x, i) => { if (x && x.m && x.v) SL.jogos[i] = { m: String(x.m), v: String(x.v) }; }); }
+    if (obj && obj.concurso) { SL.concurso = String(obj.concurso).replace(/\D/g, ""); $("#lcConc").value = SL.concurso; $("#hdrLast").textContent = `Concurso ${SL.concurso}`; }
+    const n = lcEspAplicar(obj, "análise colada");
+    $("#lcEspPasteMsg").textContent = `${n} jogos carregados e volante montado.`;
+    $("#lcEspOut").scrollIntoView({ behavior: "smooth", block: "start" });
+  } catch { $("#lcEspPasteMsg").textContent = "Não reconheci a análise. Cole o bloco inteiro, do “{” ao último “}”."; }
 });
 $("#lcChips").addEventListener("click", (e) => { const b = e.target.closest("button"); if (!b) return; SL.budget = +b.dataset.v; $("#lcBudget").value = SL.budget; lcChips(); lcSave(); });
 $("#lcBudget").addEventListener("change", (e) => { SL.budget = Math.max(4, +String(e.target.value).replace(/\./g, "").replace(",", ".") || 4); lcChips(); lcSave(); });
 $("#lcOtimizar").addEventListener("click", () => {
   const o = LC.otimizar(lcP(), +SL.budget || 4);
   if (!o) { toast("Não consegui montar com esse valor."); return; }
-  SL.marks = o.marks; lcSave(); lcPaint();
+  SL.marks = o.marks; lcSave(); lcPaint(); lcEspRender();
   $("#lcResumo").scrollIntoView({ behavior: "smooth", block: "start" });
   toast(`${o.d} ${o.d === 1 ? "duplo" : "duplos"} e ${o.t} ${o.t === 1 ? "triplo" : "triplos"} · ${brl(o.cost)}`);
 });
