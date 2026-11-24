@@ -127,8 +127,29 @@
   }
 
   /* ---------- Trevos (+Milionária) e Time do Coração (Timemania) ---------- */
+  // Os trevos podem ser só imagens (o número desenhado, sem texto). Acha a área pelos botões
+  // "Complete os Trevos" / "Limpar os Trevos" e o texto "Trevos da Sorte".
+  var btTrevoLimpar = function () { return botao("limpartrevos", /^LIMPAR (OS )?TREVOS$/); };
+  var btTrevoComplete = function () { return botao("completetrevos", /^COMPLETE (OS )?TREVOS$/); };
+  function areaTrevos() {
+    var b = btTrevoComplete() || btTrevoLimpar();
+    var a = b;
+    while (a && a.parentElement) { a = a.parentElement; if (/TREVOS? DA SORTE/.test(norm(a.innerText)) && a.querySelectorAll("*").length > 12) return a; }
+    var ps = document.querySelectorAll("p, span, div, label, h3, h4");
+    for (var i = 0; i < ps.length; i++) if (vis(ps[i]) && /^ESCOLHA .*TREVOS/.test(norm(ps[i].innerText)) && ps[i].children.length < 3) { var c = ps[i].parentElement; for (var k = 0; k < 3 && c; k++) { if (c.querySelectorAll("*").length > 12) return c; c = c.parentElement; } }
+    return null;
+  }
+  function numeroDe(el, idx) {
+    var cand = [(el.innerText || "").trim(), el.getAttribute("alt"), el.getAttribute("title"), el.getAttribute("aria-label"), el.getAttribute("data-trevo"), el.getAttribute("value"), el.id];
+    var im = el.querySelector && el.querySelector("img, [alt], [title], [aria-label]");
+    if (im) cand.push(im.getAttribute("alt"), im.getAttribute("title"), im.getAttribute("aria-label"), (im.getAttribute("src") || "").split("/").pop());
+    if (el.tagName === "IMG") cand.push((el.getAttribute("src") || "").split("/").pop());
+    for (var i = 0; i < cand.length; i++) { var m = String(cand[i] || "").match(/(?:^|\D)0?([1-6])(?:\D|$)/); if (m) return +m[1]; }
+    return idx + 1; // pela ordem, da esquerda para a direita
+  }
   function trevoEls() {
     var achados = {};
+    // 1) jeito antigo: elementos com o número escrito
     var cands = document.querySelectorAll('[id*="trevo" i] *, [class*="trevo" i] *, [id*="trevo" i], [class*="trevo" i], a[id^="t"][ng-click]');
     Array.prototype.forEach.call(cands, function (el) {
       if (!vis(el)) return;
@@ -136,9 +157,44 @@
       if (!/^\d$/.test(t)) return;
       var v = +t; if (v >= 1 && v <= 6 && !achados[v]) achados[v] = el;
     });
-    return achados;
+    if (Object.keys(achados).length >= 6) return achados;
+    // 2) pela área: um bloco com 6 itens parecidos (as imagens dos trevos)
+    var area = areaTrevos(); if (!area) return achados;
+    var pais = area.querySelectorAll("*"), melhor = null;
+    for (var i = 0; i < pais.length && !melhor; i++) {
+      var filhos = Array.prototype.filter.call(pais[i].children, function (c) { return vis(c) && !/COMPLETE|LIMPAR|SURPRESINHA/.test(norm(c.innerText)) && !c.querySelector("button"); });
+      if (filhos.length < 6 || filhos.length > 7) continue;
+      var tag = filhos[0].tagName, iguais = filhos.filter(function (c) { return c.tagName === tag; });
+      if (iguais.length !== 6) continue;
+      var r0 = iguais[0].getBoundingClientRect();
+      if (r0.width < 12 || r0.width > 140 || r0.height < 12 || r0.height > 140) continue;
+      melhor = iguais;
+    }
+    if (!melhor) return achados;
+    var res = {};
+    melhor.forEach(function (el, ix) { var n = numeroDe(el, ix); if (!res[n]) res[n] = el; });
+    if (Object.keys(res).length < 6) { res = {}; melhor.forEach(function (el, ix) { res[ix + 1] = el; }); }
+    return res;
   }
-  function trevosSel(map) { return Object.keys(map).map(Number).filter(function (k) { return marcado(map[k]); }).sort(); }
+  // Linha que mostra os trevos escolhidos (ao lado de "Complete os Trevos"); se não houver, usa a classe do item
+  function linhaTrevos() {
+    var b = btTrevoComplete() || btTrevoLimpar(); if (!b) return null;
+    var row = b.parentElement;
+    for (var k = 0; k < 3 && row; k++, row = row.parentElement) {
+      var els = row.querySelectorAll("input, span, div, p, label");
+      for (var i = 0; i < els.length; i++) {
+        var e = els[i]; if (e.contains(b) || e.querySelector("button") || /BUTTON|A/.test(e.tagName)) continue;
+        if (e.tagName === "INPUT") return e;
+        if (!e.children.length && (e.innerText || "").trim() === "" || /^[\d\s,]+$/.test((e.innerText || "").trim())) { if (e.getBoundingClientRect().width > 60) return e; }
+      }
+    }
+    return null;
+  }
+  function trevosSel(map) {
+    var l = linhaTrevos();
+    if (l) { var t = l.tagName === "INPUT" ? l.value : l.innerText; var ns = (String(t || "").match(/\d+/g) || []).map(Number).filter(function (n, ix, a) { return n >= 1 && n <= 6 && a.indexOf(n) === ix; }).sort(); if (ns.length || !Object.keys(map).some(function (k) { return marcado(map[k]); })) return ns; }
+    return Object.keys(map).map(Number).filter(function (k) { return marcado(map[k]); }).sort();
+  }
   function escolherTime(nome) {
     var alvo = norm(String(nome).replace(/\s*\((\w\w)\)\s*$/, "/$1")), base = alvo.split("/")[0];
     var sels = document.querySelectorAll("select");
@@ -208,7 +264,7 @@
     d.carrinho = desc(btCarrinho()); d.limpar = desc(btLimpar());
     d.total = total(); d.valor = valorAposta(); d.contador = contadorCarrinho();
     d.botoes = Array.prototype.slice.call(document.querySelectorAll("button, a.btn, [role=button]")).filter(vis).slice(0, 25).map(function (b) { return norm(b.innerText).slice(0, 30); }).filter(Boolean);
-    if (g === "mm") d.trevos = Object.keys(trevoEls());
+    if (g === "mm") { var tm = trevoEls(); d.trevos = Object.keys(tm).map(function (k) { return k + ": " + desc(tm[k]); }); d.trevosArea = desc(areaTrevos()); d.trevosLinha = desc(linhaTrevos()); d.trevosMarcados = trevosSel(tm); }
     if (g === "tm") d.selects = document.querySelectorAll("select").length;
     return d;
   }
@@ -413,8 +469,16 @@
         if (g === "mm") {
           var tmap = trevoEls();
           if (Object.keys(tmap).length < 6) { log("Não encontrei os trevos na página. Parei: faça este jogo à mão e toque em Diagnóstico para eu ajustar o robô."); parar = true; break; }
-          trevosSel(tmap).forEach(function (t) { if (j.t.indexOf(t) < 0) tmap[t].click(); });
-          for (var q = 0; q < j.t.length; q++) if (trevosSel(tmap).indexOf(j.t[q]) < 0) { tmap[j.t[q]].click(); await wait(150); }
+          var alvoT = j.t.join(" ");
+          if (trevosSel(tmap).join(" ") !== alvoT) {
+            var lt = btTrevoLimpar();
+            if (trevosSel(tmap).length && lt) { lt.click(); await wait(500); }
+            trevosSel(tmap).forEach(function (t) { if (j.t.indexOf(t) < 0) clicar(tmap[t]); });
+            for (var q = 0; q < j.t.length; q++) if (trevosSel(tmap).indexOf(j.t[q]) < 0) { clicar(tmap[j.t[q]]); await wait(250); }
+          }
+          var okT = false;
+          for (var wt = 0; wt < 15; wt++) { if (trevosSel(tmap).join(" ") === alvoT) { okT = true; break; } await wait(150); }
+          if (!okT) { log("Marquei os trevos " + alvoT + ", mas a página mostra: " + (trevosSel(tmap).join(" ") || "nenhum") + ". Tentando de novo…"); continue; }
         }
         if (g === "tm") {
           var escolhido = escolherTime(lido.time);
