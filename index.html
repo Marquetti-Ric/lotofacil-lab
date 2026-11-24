@@ -334,6 +334,11 @@ body[data-game="lc"] #tabs { display: none; }
     <div class="card">
       <div class="row between"><span class="label">Estratégia</span><button class="btn line" type="button" id="btnCompare">Comparar todas</button></div>
       <div class="strats" id="strats"></div>
+      <div id="inedBox" hidden style="display:grid;gap:8px;margin-top:10px">
+        <div class="field"><label class="label" for="inedNivel">Nenhum jogo pode ter, em comum com algum resultado já sorteado…</label>
+          <select id="inedNivel"><option value="6">as 6 dezenas (só nunca ter saído igual)</option><option value="5">5 ou mais dezenas (nunca daria quina no passado)</option><option value="4">4 ou mais dezenas (nunca daria quadra no passado)</option></select></div>
+        <p class="small muted" id="inedInfo"></p>
+      </div>
       <div id="cmpOut" hidden></div>
     </div>
     <div class="card">
@@ -1256,7 +1261,7 @@ const MS = (() => {
   function overlap(a, b) { const s = new Set(a); let c = 0; for (const n of b) if (s.has(n)) c++; return c; }
 
   /* ---------- Gerador por orçamento ---------- */
-  function generateBudget({ count, filters = [], fixed = [], excluded = [], last = null, maxOverlap = 2, existing = [], weights = null }) {
+  function generateBudget({ count, filters = [], fixed = [], excluded = [], last = null, maxOverlap = 2, existing = [], weights = null, reject = null }) {
     const fixedSet = new Set(fixed);
     const pool = ALL.filter((n) => !fixedSet.has(n) && !excluded.includes(n));
     const need = K - fixed.length;
@@ -1270,6 +1275,7 @@ const MS = (() => {
       const key = t.join(",");
       if (keys.has(key)) continue;
       if (!passes(metrics(t, last), filters)) { filterMiss++; continue; }
+      if (reject && reject(t)) { filterMiss++; continue; }
       if (tickets.some((x) => overlap(x, t) > ov) || existing.some((x) => overlap(x, t) > ov)) {
         if (tries % 4000 === 0 && ov < K - 1) { ov++; relaxed = true; }
         continue;
@@ -1459,10 +1465,26 @@ const MS = (() => {
     mista7: { nome: "1 aposta de 7 + apostas de 6", desc: "Uma aposta de 7 dezenas (vale 7 apostas) e o restante em jogos de 6 espalhados." },
     mista8: { nome: "1 aposta de 8 + apostas de 6", desc: "Uma aposta de 8 dezenas (vale 28 apostas) e o restante em jogos de 6." },
     deslocamento: { nome: "Deslocamento", desc: "Um jogo base e cópias dele andando uma casa para frente a cada jogo." },
+    ineditos: { nome: "Combinações inéditas", desc: "Só jogos de 6 que nunca saíram em nenhum concurso. Dá para exigir também que nenhum tenha 5 (ou 4) dezenas iguais a um resultado." },
   };
   const MULTI = { mista7: 7, mista8: 8 };
+  /* Combinações inéditas: compara cada jogo com todos os resultados (como bits de 60 dezenas) */
+  function historicoBits(results) { return (results || []).filter((r) => r && r.dezenas && r.dezenas.length === K).map((r) => [lo(r.dezenas), hi(r.dezenas)]); }
+  function maxIguais(t, hist) { const a = lo(t), b = hi(t); let m = 0; for (const [x, y] of hist) { const c = popcount(a & x) + popcount(b & y); if (c > m) { m = c; if (m === K) break; } } return m; }
+  function inedInfo(results) {
+    const hist = historicoBits(results), uniq = new Set(hist.map(([x, y]) => x + ":" + y));
+    return { sorteios: hist.length, distintos: uniq.size, fracao: uniq.size / TOTAL_COMB };
+  }
 
-  function buildPortfolio(kind, { count, filters = [], fixed = [], excluded = [], last = null, maxOverlap = 2, step = 1, weights = null }) {
+  function buildPortfolio(kind, { count, filters = [], fixed = [], excluded = [], last = null, maxOverlap = 2, step = 1, weights = null, results = null, inedito = 6 }) {
+    if (kind === "ineditos") {
+      const hist = historicoBits(results);
+      if (!hist.length) throw new Error("Para gerar combinações inéditas, o histórico de resultados precisa estar carregado.");
+      const lim = Math.min(K, Math.max(4, +inedito || 6)); // não pode ter "lim" ou mais dezenas iguais a nenhum resultado
+      const r = generateBudget({ count, filters, fixed, excluded, last, maxOverlap, weights, reject: (t) => maxIguais(t, hist) >= lim });
+      const pior = r.tickets.reduce((m, t) => Math.max(m, maxIguais(t, hist)), 0);
+      return { kind, bets: r.tickets, tickets: r.tickets, complete: r.complete, relaxed: r.relaxed, maxOverlapUsed: r.maxOverlapUsed, inedito: { limite: lim, sorteios: hist.length, maiorIgual: pior, aprovacao: r.passRate } };
+    }
     if (MULTI[kind]) {
       const size = MULTI[kind], inside = comb(size, K);
       if (count < inside) throw new Error(`Uma aposta de ${size} dezenas custa ${inside} apostas simples. Aumente o valor.`);
@@ -1601,7 +1623,7 @@ const MS = (() => {
     });
   }
 
-  return { N, K, MEAN, SD, wpick, PREFS, prefWeights, LOGICS, backtest, expand, pickSet, shiftTickets, STRATEGIES, MULTI, buildPortfolio, portfolioMetrics, ALL, PRIMOS, MOLDURA, TOTAL_COMB, comb, probHits, metrics, FILTER_DEFS, passes, overlap, generateBudget,
+  return { maxIguais, inedInfo, historicoBits, N, K, MEAN, SD, wpick, PREFS, prefWeights, LOGICS, backtest, expand, pickSet, shiftTickets, STRATEGIES, MULTI, buildPortfolio, portfolioMetrics, ALL, PRIMOS, MOLDURA, TOTAL_COMB, comb, probHits, metrics, FILTER_DEFS, passes, overlap, generateBudget,
     fechamento, fechamentoCost, verifyFechamento, stats, filterCoverage, hits, parseRows, parseText, shuffle };
 })();
 if (typeof module !== "undefined") module.exports = MS;
@@ -23493,15 +23515,26 @@ function updateBudget() {
   renderStrats(n);
   return n;
 }
+function renderIned() {
+  const on = S.strategy === "ineditos" && !!C.inedInfo;
+  $("#inedBox").hidden = !on;
+  if (!on) return;
+  const i = C.inedInfo(S.results);
+  $("#inedInfo").innerHTML = i.sorteios
+    ? `O histórico tem ${intBR(i.sorteios)} concursos: só ${intBR(i.distintos)} das ${intBR(C.TOTAL_COMB)} combinações possíveis já saíram (${(i.fracao * 100).toLocaleString("pt-BR", { maximumFractionDigits: 4 })}%). Na prática, quase todo jogo já é inédito. Sendo honesto: cada combinação tem a mesma chance em todo sorteio, tenha saído ou não, então isso não aumenta a chance de ganhar. Serve para não repetir um resultado antigo e, nos níveis 5 e 4, para jogos “diferentes de tudo que já saiu”.`
+    : "Carregue o histórico de resultados (aba Números) para usar esta opção.";
+}
 function renderStrats(n) {
   n = n ?? Math.floor(parseMoney($("#budget").value) / S.settings.price + 1e-9);
   if (C.MULTI[S.strategy] && n < multiCost(S.strategy)) S.strategy = "simples";
+  renderIned();
   $("#strats").innerHTML = Object.entries(C.STRATEGIES).map(([k, v]) => {
     const need = C.MULTI[k] ? multiCost(k) : 1;
     const ok = n >= need;
     return `<button type="button" class="strat" data-k="${k}" aria-pressed="${S.strategy === k}" ${ok ? "" : "disabled"}><b>${v.nome}</b><span>${ok ? v.desc : "Precisa de pelo menos " + brl(need * S.settings.price) + "."}</span></button>`;
   }).join("");
 }
+$("#inedNivel").addEventListener("change", () => { if (S.lastGen && S.lastGen.kind === "ineditos") $("#btnGerar").click(); });
 $("#strats").addEventListener("click", (e) => {
   const b = e.target.closest(".strat"); if (!b || b.disabled) return;
   S.strategy = b.dataset.k; renderStrats();
@@ -23560,6 +23593,7 @@ function runGenerate(count, opts = {}) {
   return C.buildPortfolio(opts.strategy || S.strategy, {
     weights, count, filters, fixed: opts.fixed || fixed, excluded: opts.excluded || excluded,
     last: last() ? last().dezenas : null, maxOverlap: opts.maxOverlap || +$("#overlap").value, results: S.results,
+    inedito: opts.inedito || +($("#inedNivel") ? $("#inedNivel").value : 6) || 6,
   });
 }
 function metricsFor(tickets) {
@@ -23589,6 +23623,7 @@ function renderGenOut(res, cost) {
   const msgs = [];
   if (!res.complete) msgs.push(`<div class="note warn">Só consegui ${res.bets.length} apostas com essas regras. Afrouxe os filtros ou as dezenas fixas.</div>`);
   if (res.relaxed) msgs.push(`<div class="note">Para caber tudo, alguns jogos chegam a ter ${res.maxOverlapUsed} dezenas iguais entre si.</div>`);
+  if (res.inedito) msgs.push(`<div class="note">Conferido contra os ${intBR(res.inedito.sorteios)} resultados: nenhum destes jogos já saiu${res.inedito.limite < 6 ? `, e nenhum tem ${res.inedito.limite} ou mais dezenas iguais a um sorteio` : ""}. O máximo em comum com algum resultado é ${res.inedito.maiorIgual} ${res.inedito.maiorIgual === 1 ? "dezena" : "dezenas"}.</div>`);
   out.innerHTML = `
     <div class="row between"><h2>${res.bets.length} ${res.bets.length === 1 ? "aposta" : "apostas"} · ${brl(cost)}</h2><span class="pill">para o concurso ${nextConcurso() ?? "?"}</span></div>
     <p class="small muted">${C.STRATEGIES[res.kind].nome}${S.pref !== "neutra" ? " · preferência: " + C.PREFS[S.pref].toLowerCase() : ""}</p>
@@ -24343,7 +24378,7 @@ Contexto: último concurso ${l ? `${l.concurso} (${l.data || "data não informad
   if (CFG.id === "ms") return `Você é o agente do app "Lotofácil Lab", agora na Mega-Sena, especialista em Mega-Sena, falando com um usuário brasileiro. Responda em português do Brasil, de forma direta e curta (celular).
 Regras do jogo: 60 dezenas, sorteio de 6; aposta simples de 6 dezenas custa ${brl(S.settings.price)}; dá para marcar de 6 a 20 dezenas (uma aposta de n dezenas custa C(n,6) apostas simples: 7 = 7, 8 = 28, 9 = 84, 10 = 210). Prêmios: quadra (4), quina (5) e sena (6), todos variáveis; o app usa valores de referência de quadra ${brl(S.settings.p4)} e quina ${brl(S.settings.p5)} só para estimativas. Chances por aposta simples: sena 1 em 50.063.860, quina 1 em 154.518, quadra 1 em 2.332.
 Honestidade: cada sorteio é independente e todas as 50.063.860 combinações têm a mesma chance. Nunca diga que histórico, frequência, atraso, filtros ou você aumentam a chance de acertar. Explique isso quando o usuário sugerir o contrário, sem sermão. O que realmente ajuda: jogos diferentes entre si, fechamentos com garantia condicional, controlar o orçamento e evitar jogos populares (datas, sequências) para não dividir prêmio. O retorno esperado é negativo.
-Estratégias do app (parâmetro "estrategia"): simples (só jogos de 6, bem diferentes entre si), mista7 (1 aposta de 7 dezenas, que vale 7 jogos, + jogos de 6), mista8 (1 aposta de 8 = 28 jogos, + jogos de 6), deslocamento (jogo base andando uma casa a cada jogo). Para o mesmo valor, todas têm a mesma chance de sena; apostas maiores premiam menos vezes, mas pagam vários prêmios juntos quando acertam. Preferência de dezenas (parâmetro "preferencia" em gerar_jogos): neutra, quentes, frias ou atrasadas. Se o usuário perguntar se funciona, chame testar_estrategia e mostre o resultado do histórico.
+Estratégias do app (parâmetro "estrategia"): simples (só jogos de 6, bem diferentes entre si), mista7 (1 aposta de 7 dezenas, que vale 7 jogos, + jogos de 6), mista8 (1 aposta de 8 = 28 jogos, + jogos de 6), deslocamento (jogo base andando uma casa a cada jogo), ineditos (só combinações que nunca saíram em nenhum concurso; parâmetro "evitar_iguais" 6, 5 ou 4 = nenhum jogo com tantas dezenas iguais a um resultado — diga com honestidade que isso não muda a chance, pois toda combinação tem a mesma probabilidade). Para o mesmo valor, todas têm a mesma chance de sena; apostas maiores premiam menos vezes, mas pagam vários prêmios juntos quando acertam. Preferência de dezenas (parâmetro "preferencia" em gerar_jogos): neutra, quentes, frias ou atrasadas. Se o usuário perguntar se funciona, chame testar_estrategia e mostre o resultado do histórico.
 Quando o usuário perguntar qual combinação é melhor ou pedir para misturar apostas de 7/8 com de 6, chame comparar_estrategias e explique a troca com os números, sem escolher por ele se não pedir.
 Fechamentos: de 7 a 20 dezenas, garantia de quadra (4) ou quina (5) se as 6 sorteadas estiverem entre as escolhidas; use gerar_fechamento.
 Ferramentas: use gerar_jogos para criar apostas por valor, gerar_fechamento para fechamentos, estatisticas para dados. Os jogos que as ferramentas geram aparecem em cartões na tela, então não repita a lista de dezenas no texto; comente o resultado (custo, garantia, chances).
@@ -24368,6 +24403,7 @@ function agentTools(addCard) {
         preferencia: { type: "string", enum: ["neutra", "quentes", "frias", "atrasadas"], description: "Favorecer dezenas que mais saíram, menos saíram ou estão atrasadas (últimos 20 concursos). Padrão: neutra" },
         com_filtros: { type: "boolean", description: "true = jogos com perfil típico (ímpares, soma, moldura...). false = surpresinha pura" },
         fixas: { type: "array", items: { type: "integer" }, description: "Dezenas obrigatórias (opcional)" },
+        evitar_iguais: { type: "integer", description: "Só na estratégia ineditos (Mega-Sena): 6, 5 ou 4. Padrão 6." },
         excluidas: { type: "array", items: { type: "integer" }, description: "Dezenas proibidas (opcional)" },
       }, required: ["valor"] },
       execute(inp) {
@@ -24378,7 +24414,7 @@ function agentTools(addCard) {
         const clean = (a) => (Array.isArray(a) ? a.map(numIn).filter((n) => n >= 1 && n <= CFG.N) : []);
         const strategy = C.STRATEGIES[inp.estrategia] ? String(inp.estrategia) : "simples";
         const pref = C.PREFS[inp.preferencia] ? String(inp.preferencia) : "neutra";
-        const res = runGenerate(count, { strategy, pref, prefWin: 20, mode: inp.com_filtros === false ? "puro" : "filtros", fixed: clean(inp.fixas), excluded: clean(inp.excluidas), maxOverlap: CFG.overlapDef });
+        const res = runGenerate(count, { strategy, pref, prefWin: 20, mode: inp.com_filtros === false ? "puro" : "filtros", fixed: clean(inp.fixas), excluded: clean(inp.excluidas), maxOverlap: CFG.overlapDef, inedito: [4, 5, 6].includes(+inp.evitar_iguais) ? +inp.evitar_iguais : 6 });
         const cost = res.tickets.length * S.settings.price, m = metricsFor(res.tickets);
         addCard({ title: `${C.STRATEGIES[strategy].nome} · ${res.bets.length} apostas · ${brl(cost)}`, tickets: res.tickets, bets: res.bets, name: C.STRATEGIES[strategy].nome + " · " + brl(cost) });
         const ch = {}; CFG.cmpCols.forEach(([f, l]) => { ch["chance_" + keyOf(l)] = Number(m[f].toPrecision(3)); });
