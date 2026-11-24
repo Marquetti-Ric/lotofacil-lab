@@ -54,6 +54,7 @@
   function marcado1(el) {
     if (SEL_RE.test(cls(el))) return true;
     var a = el.getAttribute("aria-pressed") || el.getAttribute("aria-checked") || el.getAttribute("aria-selected");
+    if (el.tagName === "IMG" && /(^|[_\-\/.])(on|sel\w*|ativo|ativ\w*|marcad\w*|active|checked)([_\-.]|$)/i.test((el.getAttribute("src") || "").split("/").pop())) return true;
     return a === "true" || (el.type === "checkbox" && el.checked);
   }
   function marcado(el) {
@@ -181,8 +182,10 @@
     var b = btTrevoComplete() || btTrevoLimpar(); if (!b) return null;
     var para = null, ps = document.querySelectorAll("p, span, div, label, h3, h4, h5, strong");
     for (var i = 0; i < ps.length; i++) if (vis(ps[i]) && /^ESCOLHA .*TREVOS/.test(norm(ps[i].innerText)) && norm(ps[i].innerText).length < 90) para = ps[i];
-    var rb = b.getBoundingClientRect(), topo = para ? para.getBoundingClientRect().bottom - 2 : rb.top - 160;
-    return { top: topo, bottom: rb.top + 2 };
+    var rb = b.getBoundingClientRect(), rp = para && para.getBoundingClientRect();
+    var topo = rp && rp.top < rb.top - 20 && rb.top - rp.top < 400 ? rp.top - 2 : rb.top - 180;
+    var area = areaTrevos(), ra = area ? area.getBoundingClientRect() : { left: 0, right: innerWidth };
+    return { top: topo, bottom: rb.top + 2, left: Math.max(0, ra.left), right: Math.min(innerWidth, Math.max(ra.right, rb.right)) };
   }
   function trevosPorPosicao() {
     var f = faixaTrevos(); if (!f || f.bottom - f.top < 15) return null;
@@ -205,7 +208,7 @@
       var moda = tam.slice().sort(function (a, b) { return cnt(b) - cnt(a); })[0];
       grupos = grupos.filter(function (g, i) { return Math.abs(tam[i] - moda) <= 1; });
     }
-    if (grupos.length !== 6) return null;
+    if (grupos.length !== 6) return trevosPorPontos();
     grupos.sort(function (a, b) { return a.cx - b.cx; });
     var res = {};
     grupos.forEach(function (g, ix) {
@@ -218,8 +221,45 @@
     if (Object.keys(res).length < 6) { res = {}; grupos.forEach(function (g, ix) { res[ix + 1] = g.els[0]; res[ix + 1].__lfGrupo = g.els; }); }
     return res;
   }
+  // 4) varre a faixa ponto a ponto (pega imagem com áreas clicáveis, desenho por CSS, etc.)
+  function quadrado(r) { return r.width >= 20 && r.width <= 130 && r.height >= 20 && r.height <= 130 && Math.abs(r.width - r.height) <= 0.45 * Math.max(r.width, r.height); }
+  function trevosPorPontos() {
+    var f = faixaTrevos(); if (!f) return null;
+    var vistos = [], areas = null;
+    for (var y = Math.max(0, f.top); y < Math.min(innerHeight, f.bottom); y += 6) {
+      for (var x = f.left; x < f.right; x += 6) {
+        var h = document.elementFromPoint(x, y);
+        if (!h || box.contains(h)) continue;
+        for (var sd = 0; sd < 5 && h && h.shadowRoot; sd++) { var inn = h.shadowRoot.elementFromPoint(x, y); if (!inn || inn === h) break; h = inn; }
+        if (h.tagName === "AREA" || h.tagName === "IMG" && h.useMap) {
+          var mp = h.tagName === "AREA" ? h.parentElement : document.querySelector("map[name='" + h.useMap.replace("#", "") + "']");
+          if (mp && mp.querySelectorAll("area").length >= 6) areas = mp;
+          continue;
+        }
+        var e = h;
+        for (var k = 0; k < 4 && e && e !== document.body; k++, e = e.parentElement) if (quadrado(e.getBoundingClientRect())) { if (vistos.indexOf(e) < 0) vistos.push(e); break; }
+      }
+    }
+    if (areas) {
+      var img = document.querySelector("img[usemap='#" + areas.name + "']"), ri = img ? img.getBoundingClientRect() : null;
+      var lst = Array.prototype.slice.call(areas.querySelectorAll("area")).map(function (a) { var c = (a.coords || "").split(",").map(Number); return { a: a, x: c.length >= 2 ? c[0] : 0 }; }).sort(function (u, v) { return u.x - v.x; });
+      var ra = {}; lst.slice(0, 6).forEach(function (o, ix) { var n = numeroDe(o.a, ix); ra[ra[n] ? ix + 1 : n] = o.a; o.a.__lfImg = img; });
+      return Object.keys(ra).length >= 6 ? ra : null;
+    }
+    var gr = [];
+    vistos.forEach(function (e) { var r = e.getBoundingClientRect(), cx = r.left + r.width / 2; var g = gr.filter(function (x) { return Math.abs(x.cx - cx) < 12; })[0]; if (!g) { g = { cx: cx, els: [] }; gr.push(g); } g.els.push(e); });
+    if (gr.length < 6) return null;
+    if (gr.length > 6) { var w0 = gr.map(function (g) { return Math.round(g.els[0].getBoundingClientRect().width / 6); }); var c0 = function (v) { return w0.filter(function (x) { return x === v; }).length; }; var md = w0.slice().sort(function (a, b) { return c0(b) - c0(a); })[0]; gr = gr.filter(function (g, i) { return Math.abs(w0[i] - md) <= 1; }); }
+    if (gr.length !== 6) return null;
+    gr.sort(function (a, b) { return a.cx - b.cx; });
+    var res = {};
+    gr.forEach(function (g, ix) { var el = g.els[0]; el.__lfGrupo = g.els; var n = numeroDe(el, ix); res[res[n] ? ix + 1 : n] = el; });
+    if (Object.keys(res).length < 6) { res = {}; gr.forEach(function (g, ix) { res[ix + 1] = g.els[0]; }); }
+    return res;
+  }
   // clica como uma pessoa: no ponto central do trevo
   function clicarTrevo(el) {
+    if (el.tagName === "AREA") { el.click(); return; }
     try { el.scrollIntoView({ block: "center" }); } catch (e) {}
     var r = el.getBoundingClientRect(), x = r.left + r.width / 2, y = r.top + r.height / 2, alvo = document.elementFromPoint(x, y);
     if (alvo && !box.contains(alvo) && (el.contains(alvo) || alvo.contains(el) || (el.__lfGrupo || []).indexOf(alvo) >= 0)) {
@@ -303,8 +343,17 @@
     ["ng-click", "role", "data-numero", "aria-pressed"].forEach(function (a) { if (el.getAttribute(a)) s += "[" + a + "=" + String(el.getAttribute(a)).slice(0, 40) + "]"; });
     return s;
   }
+  // estrutura do bloco sem textos (só tags, ids, classes e tamanhos), para eu ver como a Caixa montou
+  function esqueleto(el, nv) {
+    if (nv > 9 || box.contains(el)) return "";
+    var r = el.getBoundingClientRect(), at = "";
+    ["id", "class", "ng-click", "ng-class", "ng-repeat", "role", "type", "src", "usemap", "alt", "for", "name", "style"].forEach(function (a) { var v = el.getAttribute && el.getAttribute(a); if (v) at += " " + a + "=\"" + String(v).split("/").pop().slice(0, 50) + "\""; });
+    var filhos = Array.prototype.map.call(el.children, function (c) { return esqueleto(c, nv + 1); }).join("");
+    var t = el.children.length ? "" : (el.textContent || "").trim().replace(/\s+/g, " ").slice(0, 3).replace(/[^\d\s]/g, "");
+    return "<" + el.tagName.toLowerCase() + at + (r.width ? " [" + Math.round(r.width) + "x" + Math.round(r.height) + "]" : "") + ">" + t + filhos + "</" + el.tagName.toLowerCase() + ">";
+  }
   function diagnostico() {
-    var g = jogoDaPagina(), d = { robo: "v3", rota: location.hash || location.pathname, titulo: document.title, detectado: detectar(), escolhido: g };
+    var g = jogoDaPagina(), d = { robo: "v4", rota: location.hash || location.pathname, titulo: document.title, detectado: detectar(), escolhido: g };
     d.titulos = Array.prototype.slice.call(document.querySelectorAll("h1, h2, h3")).filter(vis).slice(0, 6).map(function (h) { return h.innerText.trim().slice(0, 60); });
     if (g) {
       mapa = mapear(g);
@@ -317,7 +366,10 @@
     d.total = total(); d.valor = valorAposta(); d.contador = contadorCarrinho();
     d.botoes = Array.prototype.slice.call(document.querySelectorAll("button, a.btn, [role=button]")).filter(vis).slice(0, 25).map(function (b) { return norm(b.innerText).slice(0, 30); }).filter(Boolean);
     if (g === "mm") { var tm = trevoEls(); d.trevos = Object.keys(tm).map(function (k) { return k + ": " + desc(tm[k]); }); d.trevosArea = desc(areaTrevos()); d.trevosLinha = desc(linhaTrevos()); d.trevosMarcados = trevosSel(tm);
-      var f = faixaTrevos();
+      var ar = areaTrevos();
+      if (ar) d.trevosHtml = esqueleto(ar, 0).slice(0, 3500);
+      var f = faixaTrevos(); d.faixa = f && [Math.round(f.top), Math.round(f.bottom), Math.round(f.left), Math.round(f.right)];
+      d.trevosPontos = Object.keys(trevosPorPontos() || {}).length;
       if (f) d.trevosFaixa = Array.prototype.filter.call(document.body.querySelectorAll("*"), function (e) { if (box.contains(e)) return false; var r = e.getBoundingClientRect(); return r.width && r.top >= f.top - 1 && r.bottom <= f.bottom + 1; }).slice(0, 40).map(function (e) { var r = e.getBoundingClientRect(); return desc(e) + " " + Math.round(r.width) + "x" + Math.round(r.height) + "@" + Math.round(r.left); });
     }
     if (g === "tm") d.selects = document.querySelectorAll("select").length;
@@ -462,7 +514,7 @@
   box.id = "lflab-robo";
   var opts = "<option value='auto'>Automático</option>" + Object.keys(JOGOS).map(function (k) { return "<option value='" + k + "'>" + JOGOS[k].nome + "</option>"; }).join("");
   box.innerHTML = "<style>" + css + "</style><button class='x' title='Fechar'>×</button>" +
-    "<h3>Robô do Lotofácil Lab <small style='font-weight:400;color:#888'>v3</small></h3><div class='row'><span>Modalidade:</span><select class='modal'>" + opts + "</select><span class='jogo small'></span></div>" +
+    "<h3>Robô do Lotofácil Lab <small style='font-weight:400;color:#888'>v4</small></h3><div class='row'><span>Modalidade:</span><select class='modal'>" + opts + "</select><span class='jogo small'></span></div>" +
     "<textarea placeholder='Cole aqui os jogos, um por linha.\nEx.: 01 02 05 07 09 10 13 14 16 18 20 22 23 24 25'></textarea>" +
     "<div class='row'><button class='sec colar'>Colar</button><button class='go ir'>Colocar no carrinho</button><button class='sec parar' hidden>Parar</button><button class='sec diag'>Diagnóstico</button></div><div class='row'><button class='go premios' style='background:#19794a'>Conferir prêmios não resgatados</button></div>" +
     "<div class='bar'><i></i></div><div class='log'>Entre na sua conta, abra a página da modalidade e cole os jogos. O robô só monta o carrinho: a conferência e o pagamento são seus.</div>";
@@ -524,6 +576,7 @@
         if (g === "mm") {
           var bct = btTrevoComplete(); if (bct) { try { bct.scrollIntoView({ block: "center" }); } catch (e) {} await wait(200); }
           var tmap = trevoEls();
+          if (Object.keys(tmap).length < 6) { tmap = trevosPorPontos() || tmap; }
           if (Object.keys(tmap).length < 6) { log("Não encontrei os trevos na página. Parei: faça este jogo à mão e toque em Diagnóstico para eu ajustar o robô."); parar = true; break; }
           var alvoT = j.t.join(" ");
           if (trevosSel(tmap).join(" ") !== alvoT) {
