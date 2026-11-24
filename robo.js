@@ -287,28 +287,100 @@
     if (l) { var t = l.tagName === "INPUT" ? l.value : l.innerText; var ns = (String(t || "").match(/\d+/g) || []).map(Number).filter(function (n, ix, a) { return n >= 1 && n <= 6 && a.indexOf(n) === ix; }).sort(); if (ns.length || !Object.keys(map).some(function (k) { return trevoMarcado(map[k]); })) return ns; }
     return Object.keys(map).map(Number).filter(function (k) { return trevoMarcado(map[k]); }).sort();
   }
-  function escolherTime(nome) {
-    var alvo = norm(String(nome).replace(/\s*\((\w\w)\)\s*$/, "/$1")), base = alvo.split("/")[0];
-    var sels = document.querySelectorAll("select");
-    for (var i = 0; i < sels.length; i++) {
-      if (box.contains(sels[i])) continue;
-      var opts = sels[i].options;
-      for (var j = 0; j < opts.length; j++) {
-        var o = norm(opts[j].text);
-        if (o === alvo || o.indexOf(alvo) === 0 || (base.length > 3 && o.indexOf(base) === 0)) {
-          sels[i].value = opts[j].value;
-          sels[i].dispatchEvent(new Event("change", { bubbles: true }));
-          return opts[j].text;
-        }
-      }
-    }
-    var cl = document.querySelectorAll("[ng-click], li, a, button");
-    for (var k = 0; k < cl.length; k++) {
-      if (!vis(cl[k])) continue;
-      var t = norm(cl[k].innerText || cl[k].textContent);
-      if (t && (t === alvo || t === base || t.indexOf(alvo) === 0)) { cl[k].click(); return cl[k].innerText.trim(); }
+  // Time do Coração da Timemania: lista de seleção, escudos (imagens), lista que abre ao clicar ou campo de busca
+  function rotulos(el) {
+    var out = [], add = function (v) { if (v) out.push(String(v)); };
+    add(el.innerText || el.textContent); ["alt", "title", "aria-label", "data-original-title", "data-nome", "data-time", "value", "name"].forEach(function (a) { add(el.getAttribute && el.getAttribute(a)); });
+    var imgs = el.tagName === "IMG" ? [el] : Array.prototype.slice.call(el.querySelectorAll ? el.querySelectorAll("img, [alt], [title]") : [], 0, 3);
+    imgs.forEach(function (im) { add(im.getAttribute("alt")); add(im.getAttribute("title")); var src = (im.getAttribute("src") || "").split("/").pop().split("?")[0].replace(/\.\w+$/, "").replace(/[_\-.]+/g, " "); add(src); });
+    return out.map(function (t) { return norm(t).replace(/\//g, " ").replace(/\s+/g, " ").trim(); }).filter(Boolean);
+  }
+  function pontuar(labels, base, uf) {
+    var best = 0;
+    labels.forEach(function (t) {
+      if (t.length > 60) return;
+      var sc = 0;
+      if (t === base + " " + uf || t === base + uf) sc = 4;
+      else if (t.indexOf(base) === 0 && new RegExp("(^|\\s)" + uf + "($|\\s)").test(t.slice(base.length))) sc = 3;
+      else if (t === base) sc = 2;
+      else if (t.indexOf(base + " ") === 0 && t.length - base.length <= 4) sc = 1;
+      if (sc > best) best = sc;
+    });
+    return best;
+  }
+  function areaTime() {
+    var ls = document.querySelectorAll("h1, h2, h3, h4, h5, p, span, label, div, strong, legend");
+    for (var i = 0; i < ls.length; i++) {
+      var t = norm(ls[i].innerText);
+      if (vis(ls[i]) && /TIME DO CORACAO/.test(t) && t.length < 80) { var c = ls[i]; for (var k = 0; k < 4 && c.parentElement; k++) { c = c.parentElement; if (c.querySelectorAll("img, li, option, [role=option], [ng-click], button, input").length >= 2) return c; } return c; }
     }
     return null;
+  }
+  function acharTime(base, uf, raiz) {
+    var cands = (raiz || document).querySelectorAll("img, a, button, li, label, [ng-click], [role=option], [role=button], mat-option, .ng-option, div[onclick], span[onclick], td");
+    var melhor = null, mp = 0, ma = 1e9;
+    Array.prototype.forEach.call(cands, function (el) {
+      if (!vis(el) || box.contains(el)) return;
+      var sc = pontuar(rotulos(el), base, uf); if (!sc) return;
+      var r = el.getBoundingClientRect(), area = r.width * r.height;
+      if (sc > mp || (sc === mp && area < ma)) { mp = sc; ma = area; melhor = el; }
+    });
+    return melhor ? { el: melhor, score: mp } : null;
+  }
+  function timeConfirmado(base, area, el) {
+    var sels = document.querySelectorAll("select");
+    for (var i = 0; i < sels.length; i++) { if (box.contains(sels[i])) continue; var o = sels[i].options[sels[i].selectedIndex]; if (o && norm(o.text).replace(/\//g, " ").indexOf(base) === 0) return true; }
+    if (el && (marcado(el) || (el.parentElement && marcado1(el.parentElement)))) return true;
+    var ins = (area || document).querySelectorAll("input[type=text], input:not([type])");
+    for (var j = 0; j < ins.length; j++) if (norm(ins[j].value).indexOf(base) === 0) return true;
+    if (area) { var t = norm(area.innerText).replace(/\//g, " "); if (/SELECIONAD|ESCOLHID|SEU TIME/.test(t) && t.indexOf(base) >= 0) return true; }
+    return null; // não deu para confirmar (mas também não deu erro)
+  }
+  async function escolherTime(nome) {
+    var alvo = norm(String(nome).replace(/\s*\((\w\w)\)\s*$/, "/$1")), partes = alvo.split("/"), base = partes[0].replace(/-/g, " ").trim(), uf = (partes[1] || "").trim();
+    // 1) lista de seleção (select)
+    var sels = document.querySelectorAll("select");
+    for (var i = 0; i < sels.length; i++) {
+      if (box.contains(sels[i]) || sels[i].options.length < 10) continue;
+      var opts = sels[i].options, bo = null, bs = 0;
+      for (var j = 0; j < opts.length; j++) { var sc = pontuar([norm(opts[j].text).replace(/\//g, " ")], base, uf); if (sc > bs) { bs = sc; bo = opts[j]; } }
+      if (bo) {
+        sels[i].value = bo.value;
+        sels[i].dispatchEvent(new Event("input", { bubbles: true })); sels[i].dispatchEvent(new Event("change", { bubbles: true }));
+        return bo.text.trim();
+      }
+    }
+    var area = areaTime();
+    // 2) escudos/itens já visíveis (primeiro perto de "Time do Coração", depois na página toda)
+    var ach = (area && acharTime(base, uf, area)) || acharTime(base, uf);
+    // 3) lista que abre ao clicar, ou campo de busca
+    if (!ach && area) {
+      var inp = area.querySelector("input[type=text], input[type=search], input:not([type])");
+      if (inp && vis(inp)) {
+        inp.focus(); inp.value = base.charAt(0) + base.slice(1).toLowerCase();
+        inp.dispatchEvent(new Event("input", { bubbles: true })); inp.dispatchEvent(new KeyboardEvent("keyup", { bubbles: true }));
+        await wait(700); ach = acharTime(base, uf);
+      }
+      if (!ach) {
+        var trig = area.querySelector("[role=combobox], .ng-select-container, mat-select, .dropdown-toggle, [data-toggle=dropdown], button, [ng-click]");
+        if (trig && vis(trig)) { clicarCentro(trig); await wait(700); ach = acharTime(base, uf); }
+      }
+    }
+    if (!ach) return null;
+    try { ach.el.scrollIntoView({ block: "center" }); } catch (e) {}
+    await wait(150);
+    clicarCentro(ach.el);
+    await wait(500);
+    var ok = timeConfirmado(base, area, ach.el);
+    if (ok === false) return null;
+    return (rotulos(ach.el)[0] || base) + (ok ? "" : " (não consegui confirmar na tela; confira)");
+  }
+  // clica como uma pessoa, no centro do elemento
+  function clicarCentro(el) {
+    var r = el.getBoundingClientRect(), x = r.left + r.width / 2, y = r.top + r.height / 2, alvo = document.elementFromPoint(x, y);
+    if (!alvo || box.contains(alvo) || !(el.contains(alvo) || alvo.contains(el))) alvo = el;
+    ["pointerdown", "mousedown", "pointerup", "mouseup"].forEach(function (t) { alvo.dispatchEvent(new MouseEvent(t, { bubbles: true, cancelable: true, view: window, clientX: x, clientY: y })); });
+    alvo.click();
   }
 
   function lerJogos(texto, g) {
@@ -353,7 +425,7 @@
     return "<" + el.tagName.toLowerCase() + at + (r.width ? " [" + Math.round(r.width) + "x" + Math.round(r.height) + "]" : "") + ">" + t + filhos + "</" + el.tagName.toLowerCase() + ">";
   }
   function diagnostico() {
-    var g = jogoDaPagina(), d = { robo: "v5", rota: location.hash || location.pathname, titulo: document.title, detectado: detectar(), escolhido: g };
+    var g = jogoDaPagina(), d = { robo: "v6", rota: location.hash || location.pathname, titulo: document.title, detectado: detectar(), escolhido: g };
     d.titulos = Array.prototype.slice.call(document.querySelectorAll("h1, h2, h3")).filter(vis).slice(0, 6).map(function (h) { return h.innerText.trim().slice(0, 60); });
     if (g) {
       mapa = mapear(g);
@@ -372,7 +444,7 @@
       d.trevosPontos = Object.keys(trevosPorPontos() || {}).length;
       if (f) d.trevosFaixa = Array.prototype.filter.call(document.body.querySelectorAll("*"), function (e) { if (box.contains(e)) return false; var r = e.getBoundingClientRect(); return r.width && r.top >= f.top - 1 && r.bottom <= f.bottom + 1; }).slice(0, 40).map(function (e) { var r = e.getBoundingClientRect(); return desc(e) + " " + Math.round(r.width) + "x" + Math.round(r.height) + "@" + Math.round(r.left); });
     }
-    if (g === "tm") d.selects = document.querySelectorAll("select").length;
+    if (g === "tm") { d.selects = document.querySelectorAll("select").length; var at = areaTime(); d.timeArea = desc(at); if (at) d.timeHtml = esqueleto(at, 0).slice(0, 3500); }
     return d;
   }
 
@@ -579,7 +651,7 @@
   box.id = "lflab-robo";
   var opts = "<option value='auto'>Automático</option>" + Object.keys(JOGOS).map(function (k) { return "<option value='" + k + "'>" + JOGOS[k].nome + "</option>"; }).join("");
   box.innerHTML = "<style>" + css + "</style><button class='x' title='Fechar'>×</button>" +
-    "<h3>Robô do Lotofácil Lab <small style='font-weight:400;color:#888'>v5</small></h3><div class='row'><span>Modalidade:</span><select class='modal'>" + opts + "</select><span class='jogo small'></span></div>" +
+    "<h3>Robô do Lotofácil Lab <small style='font-weight:400;color:#888'>v6</small></h3><div class='row'><span>Modalidade:</span><select class='modal'>" + opts + "</select><span class='jogo small'></span></div>" +
     "<textarea placeholder='Cole aqui os jogos, um por linha.\nEx.: 01 02 05 07 09 10 13 14 16 18 20 22 23 24 25'></textarea>" +
     "<div class='row'><button class='sec colar'>Colar</button><button class='go ir'>Colocar no carrinho</button><button class='sec parar' hidden>Parar</button><button class='sec diag'>Diagnóstico</button></div><div class='row'><button class='go premios' style='background:#19794a'>Conferir prêmios não resgatados</button><button class='sec recomecar' hidden>Recomeçar</button><label style='font-size:12.5px'><input type='checkbox' class='atalho' checked> usar o filtro “Premiadas” da Caixa, se houver</label></div>" +
     "<div class='bar'><i></i></div><div class='log'>Entre na sua conta, abra a página da modalidade e cole os jogos. O robô só monta o carrinho: a conferência e o pagamento são seus.</div>";
@@ -658,8 +730,9 @@
           if (!okT) { log("Marquei os trevos " + alvoT + ", mas a página mostra: " + (trevosSel(tmap).join(" ") || "nenhum") + ". Tentando de novo…"); continue; }
         }
         if (g === "tm") {
-          var escolhido = escolherTime(lido.time);
+          var escolhido = await escolherTime(lido.time);
           if (!escolhido) { log("Não encontrei o time \"" + lido.time + "\" na página. Parei: escolha o time à mão e toque em Diagnóstico para eu ajustar o robô."); parar = true; break; }
+          if (i === 0 && tent === 0) log("Time do Coração: " + escolhido);
           await wait(300);
         }
         for (var w = 0; w < 20; w++) { if (selecionados(g).join(" ") === alvo) { ok = true; break; } await wait(150); }
