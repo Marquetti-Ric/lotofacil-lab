@@ -353,7 +353,7 @@
     return "<" + el.tagName.toLowerCase() + at + (r.width ? " [" + Math.round(r.width) + "x" + Math.round(r.height) + "]" : "") + ">" + t + filhos + "</" + el.tagName.toLowerCase() + ">";
   }
   function diagnostico() {
-    var g = jogoDaPagina(), d = { robo: "v4", rota: location.hash || location.pathname, titulo: document.title, detectado: detectar(), escolhido: g };
+    var g = jogoDaPagina(), d = { robo: "v5", rota: location.hash || location.pathname, titulo: document.title, detectado: detectar(), escolhido: g };
     d.titulos = Array.prototype.slice.call(document.querySelectorAll("h1, h2, h3")).filter(vis).slice(0, 6).map(function (h) { return h.innerText.trim().slice(0, 60); });
     if (g) {
       mapa = mapear(g);
@@ -443,64 +443,129 @@
     return false;
   }
   var assinatura = function () { var l = lerLinhas(); return l && l.length ? JSON.stringify(l) : ""; };
-  var estado = null; // guarda o que já foi conferido, para continuar de onde parou
+  /* Progresso guardado no navegador (no próprio site da Caixa), para sobreviver a um F5 */
+  var CHAVE = "lflab-premios";
+  function filtrosAtuais() { return Array.prototype.filter.call(document.querySelectorAll("select"), function (x) { return !box || !box.contains(x); }).map(function (x) { return x.options[x.selectedIndex] ? x.options[x.selectedIndex].text.trim() : ""; }); }
+  function lerEstado() { try { var e = JSON.parse(localStorage.getItem(CHAVE) || "null"); return e && Date.now() - e.ts < 12 * 3600e3 ? e : null; } catch (x) { return null; } }
+  function gravarEstado(e) { try { e.ts = Date.now(); localStorage.setItem(CHAVE, JSON.stringify(e)); } catch (x) {} }
+  function apagarEstado() { try { localStorage.removeItem(CHAVE); } catch (x) {} }
+  var estado = lerEstado();
   function irPara(pg, n) {
     if (clicarPagina(pg, n)) return true;
     var seta = Array.prototype.filter.call(document.querySelectorAll("a, li, button"), function (e) { return vis(e) && /^(»|›)$/.test((e.innerText || "").trim()); })[0];
     if (seta && n === (pg.atual || 0) + 1) { seta.click(); return true; }
     return false;
   }
+  // vai até a página n mesmo que a paginação só mostre algumas de cada vez
+  async function saltarPara(n) {
+    for (var g = 0; g < 40; g++) {
+      var pg = paginacao(); if (!pg) return false;
+      if (pg.atual === n) return true;
+      var alvo = pg.map[n] ? n : Math.max.apply(null, Object.keys(pg.map).map(Number).filter(function (k) { return k < n && k !== pg.atual; }).concat([0]));
+      if (!alvo) return false;
+      var a0 = assinatura(); clicarPagina(pg, alvo);
+      if (!(await esperarMudar(a0, 100))) return false;
+      if (alvo === n) return true;
+    }
+    return false;
+  }
+  // Atalho: se a Caixa tiver um filtro de situação com "Premiadas", usa (a lista fica com poucas páginas)
+  async function filtroPremiadas() {
+    var sels = Array.prototype.filter.call(document.querySelectorAll("select"), function (x) { return vis(x) && !box.contains(x); });
+    for (var i = 0; i < sels.length; i++) {
+      var op = Array.prototype.filter.call(sels[i].options, function (o) { var t = norm(o.text); return /PREMIAD|COM PREMIO|A RESGATAR/.test(t) && !/NAO PREMIAD|SEM PREMIO/.test(t); })[0];
+      if (!op) continue;
+      if (sels[i].value !== op.value) {
+        sels[i].value = op.value; sels[i].dispatchEvent(new Event("input", { bubbles: true })); sels[i].dispatchEvent(new Event("change", { bubbles: true }));
+        var ap = botao("aplicar", /^APLICAR$/); var a0 = assinatura();
+        if (ap) { ap.click(); await esperarMudar(a0, 75); }
+      }
+      return op.text.trim();
+    }
+    return null;
+  }
   async function conferirPremios() {
     if (!naApostas()) { log("Abra \"Minha Conta\" → \"Minhas Apostas\" (a lista com a coluna Situação) e toque de novo em Conferir prêmios."); return; }
-    if (!tabelaApostas()) { log("Não achei a tabela de apostas. Toque em Aplicar nos filtros para a lista aparecer e tente de novo."); return; }
     $(".premios").disabled = true; $(".parar").hidden = false; parar = false;
+    estado = lerEstado();
+    var continuar = !!(estado && estado.parou);
+    if (!continuar && $(".atalho").checked) {
+      var f = await filtroPremiadas();
+      if (f) log("Usei o filtro da Caixa \"" + f + "\": só as premiadas aparecem, a conferência fica bem mais rápida.");
+    }
+    if (!tabelaApostas()) {
+      $(".premios").disabled = false; $(".parar").hidden = true;
+      log(/nenhum|nao (ha|foram|existem)|sem apostas/i.test(norm(txt())) ? "A Caixa não mostrou nenhuma aposta com esses filtros." : "Não achei a tabela de apostas. Toque em Aplicar nos filtros para a lista aparecer e tente de novo.");
+      return;
+    }
     log("Conferindo as apostas… (só leitura: não clico em resgatar nem em nada de pagamento)");
-    var pg = paginacao(), continuar = estado && estado.hash === location.hash && estado.parou;
-    var todas = continuar ? estado.todas : [], vistas = continuar ? estado.vistas : {}, pagina = 1;
-    var alvoIni = continuar ? estado.parou : 1;
-    if (continuar) log("Continuando da página " + alvoIni + " (já tenho " + todas.length + " apostas conferidas).");
-    if (pg && pg.atual !== alvoIni && pg.map[alvoIni]) { var a0 = assinatura(); clicarPagina(pg, alvoIni); await esperarMudar(a0, pg.atual === null && alvoIni === 1 ? 15 : 150); pg = paginacao(); }
-    else if (continuar && !(pg && pg.atual === alvoIni)) { log("Não achei o botão da página " + alvoIni + ". Vou recomeçar da página 1."); todas = []; vistas = {}; alvoIni = 1; }
-    pagina = alvoIni;
+    var todas = continuar ? estado.todas : [], vistas = continuar ? estado.vistas : {}, alvoIni = continuar ? estado.parou : 1;
+    if (continuar) {
+      var fa = filtrosAtuais();
+      if (estado.filtros && fa.join("|") !== estado.filtros.join("|")) log("Atenção: os filtros estão diferentes de quando comecei (" + estado.filtros.filter(Boolean).join(", ") + "). Se a lista mudou, toque em Recomeçar.");
+      log("Continuando da página " + alvoIni + " (já tenho " + todas.length + " apostas conferidas)…");
+    }
+    var pg = paginacao();
+    if (pg && pg.atual !== alvoIni) {
+      if (!(await saltarPara(alvoIni))) {
+        if (continuar) { log("Não consegui ir para a página " + alvoIni + ". Atualize a página (F5), abra o robô e toque em Continuar."); $(".premios").disabled = false; $(".parar").hidden = true; return; }
+      }
+    }
+    var pagina = alvoIni; pg = paginacao();
     var totalPg = pg ? pg.total : 1;
-    estado = { hash: location.hash, todas: todas, vistas: vistas, parou: null };
+    estado = { todas: todas, vistas: vistas, parou: null, total: totalPg, filtros: filtrosAtuais() };
+    var lentas = 0;
     while (true) {
       if (parar) { estado.parou = pagina; break; }
       var linhas = lerLinhas() || [];
       linhas.forEach(function (r) { var k = JSON.stringify(r); if (!vistas[k]) { vistas[k] = 1; r.pagina = pagina; todas.push(r); } });
+      estado.parou = pagina + 1; gravarEstado(estado); // se cair agora, continua da próxima
       barra.style.width = (pagina / totalPg) * 100 + "%";
       if (pagina % 10 === 0) log("Página " + pagina + " de " + totalPg + "…");
       pg = paginacao();
-      if (!pg || pagina >= pg.total) break;
-      var antes = assinatura(), foi = false;
-      for (var tent = 0; tent < 3 && !foi && !parar; tent++) {
+      if (!pg || pagina >= pg.total) { estado.parou = null; break; }
+      var antes = assinatura(), foi = false, t0 = Date.now();
+      for (var tent = 0; tent < 2 && !foi && !parar; tent++) {
         pg = paginacao();
         if (!pg || !irPara(pg, pagina + 1)) { await wait(1500); continue; }
-        foi = await esperarMudar(antes, tent === 0 ? 75 : 100); // até 15 s e depois 20 s por tentativa
-        if (!foi && tent < 2) log("A página " + (pagina + 1) + " está demorando… tentando de novo.");
+        foi = await esperarMudar(antes, 75);
+        if (!foi && tent === 0) log("A página " + (pagina + 1) + " está demorando… tentando de novo.");
       }
       if (parar) { estado.parou = pagina + 1; break; }
       if (!foi) {
         estado.parou = pagina + 1;
-        log("A página " + (pagina + 1) + " não carregou (conferi " + pagina + " de " + totalPg + "). O site da Caixa pode estar lento. Espere um pouco e toque de novo em Conferir prêmios: eu continuo da página " + (pagina + 1) + " sem perder o que já vi.");
+        log("O site da Caixa ficou lento (conferi " + pagina + " de " + totalPg + " páginas; o progresso está guardado).\n👉 Atualize a página (F5 ou Cmd+R), clique no favorito do robô e toque em \"Continuar\": eu vou direto para a página " + (pagina + 1) + ".");
+        break;
+      }
+      lentas = Date.now() - t0 > 6000 ? lentas + 1 : 0;
+      if (lentas >= 3) { // ficou lento de vez: melhor atualizar do que esperar página por página
+        estado.parou = pagina + 2; pagina++;
+        linhas = lerLinhas() || []; linhas.forEach(function (r) { var k = JSON.stringify(r); if (!vistas[k]) { vistas[k] = 1; r.pagina = pagina; todas.push(r); } });
+        log("As páginas estão demorando cada vez mais (conferi " + pagina + " de " + totalPg + "; progresso guardado).\n👉 Atualize a página (F5 ou Cmd+R), clique no favorito do robô e toque em \"Continuar\": eu sigo da página " + (pagina + 1) + ".");
+        if (pagina >= totalPg) estado.parou = null;
         break;
       }
       pagina++;
     }
+    if (estado.parou) gravarEstado(estado); else apagarEstado();
     $(".premios").disabled = false; $(".parar").hidden = true;
-    if (estado.parou) $(".premios").textContent = "Continuar conferência (da página " + estado.parou + ")";
-    else $(".premios").textContent = "Conferir prêmios não resgatados";
+    atualizarBotaoPremios();
     var grupos = { premio: [], resgatado: [], aguardando: [], nao: [], cancelada: [], outra: [] };
     todas.forEach(function (r) { grupos[classificar(r.sit)].push(r); });
     var linha = function (r) { return "• " + r.data + " · " + r.mod + " · conc. " + r.concurso + " · " + r.aposta + "\n   Situação: " + r.sit + " (pág. " + r.pagina + ")"; };
     var rel = (estado.parou ? "RESULTADO PARCIAL (faltam páginas a partir da " + estado.parou + "). " : "") + "Conferi " + todas.length + " apostas" + (estado.parou ? "" : " em " + pagina + " página(s)") + ".\n" +
       "Não premiadas: " + grupos.nao.length + " · aguardando sorteio: " + grupos.aguardando.length + " · já resgatadas/pagas: " + grupos.resgatado.length + (grupos.cancelada.length ? " · canceladas: " + grupos.cancelada.length : "");
     if (grupos.premio.length) rel += "\n\n⚠️ PREMIADAS SEM RESGATE CONFIRMADO (" + grupos.premio.length + "):\n" + grupos.premio.map(linha).join("\n");
-    else rel += estado.parou ? "\n\nAté aqui, nenhuma premiada pendente. Faltam páginas: toque em Continuar." : "\n\n✅ Nenhuma aposta premiada pendente de resgate nesta lista.";
+    else rel += estado.parou ? "\n\nAté aqui, nenhuma premiada pendente. Faltam páginas: atualize e toque em Continuar." : "\n\n✅ Nenhuma aposta premiada pendente de resgate nesta lista.";
     if (grupos.outra.length) rel += "\n\nSituação que não reconheci (" + grupos.outra.length + "), confira:\n" + grupos.outra.slice(0, 15).map(linha).join("\n");
     rel += "\n\nAtenção: só confiro o período escolhido no filtro da Caixa. Para ver mais tempo, troque o período, toque em Aplicar e confira de novo. O resgate é feito por você.";
     log(rel);
     if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(rel).catch(function () {});
+  }
+  function atualizarBotaoPremios() {
+    var e = lerEstado();
+    $(".premios").textContent = e && e.parou ? "Continuar conferência (da página " + e.parou + (e.total ? " de " + e.total : "") + ")" : "Conferir prêmios não resgatados";
+    $(".recomecar").hidden = !(e && e.parou);
   }
 
   /* ---------- Painel ---------- */
@@ -514,9 +579,9 @@
   box.id = "lflab-robo";
   var opts = "<option value='auto'>Automático</option>" + Object.keys(JOGOS).map(function (k) { return "<option value='" + k + "'>" + JOGOS[k].nome + "</option>"; }).join("");
   box.innerHTML = "<style>" + css + "</style><button class='x' title='Fechar'>×</button>" +
-    "<h3>Robô do Lotofácil Lab <small style='font-weight:400;color:#888'>v4</small></h3><div class='row'><span>Modalidade:</span><select class='modal'>" + opts + "</select><span class='jogo small'></span></div>" +
+    "<h3>Robô do Lotofácil Lab <small style='font-weight:400;color:#888'>v5</small></h3><div class='row'><span>Modalidade:</span><select class='modal'>" + opts + "</select><span class='jogo small'></span></div>" +
     "<textarea placeholder='Cole aqui os jogos, um por linha.\nEx.: 01 02 05 07 09 10 13 14 16 18 20 22 23 24 25'></textarea>" +
-    "<div class='row'><button class='sec colar'>Colar</button><button class='go ir'>Colocar no carrinho</button><button class='sec parar' hidden>Parar</button><button class='sec diag'>Diagnóstico</button></div><div class='row'><button class='go premios' style='background:#19794a'>Conferir prêmios não resgatados</button></div>" +
+    "<div class='row'><button class='sec colar'>Colar</button><button class='go ir'>Colocar no carrinho</button><button class='sec parar' hidden>Parar</button><button class='sec diag'>Diagnóstico</button></div><div class='row'><button class='go premios' style='background:#19794a'>Conferir prêmios não resgatados</button><button class='sec recomecar' hidden>Recomeçar</button><label style='font-size:12.5px'><input type='checkbox' class='atalho' checked> usar o filtro “Premiadas” da Caixa, se houver</label></div>" +
     "<div class='bar'><i></i></div><div class='log'>Entre na sua conta, abra a página da modalidade e cole os jogos. O robô só monta o carrinho: a conferência e o pagamento são seus.</div>";
   document.body.appendChild(box);
   var $ = function (s) { return box.querySelector(s); };
@@ -538,6 +603,9 @@
     navigator.clipboard.readText().then(function (t) { $("textarea").value = t; }).catch(function () { log("Não consegui ler a área de transferência. Clique na caixa e use Ctrl+V (ou Cmd+V)."); });
   };
   $(".premios").onclick = function () { conferirPremios(); };
+  $(".recomecar").onclick = function () { apagarEstado(); atualizarBotaoPremios(); log("Progresso apagado: a próxima conferência começa da página 1."); };
+  atualizarBotaoPremios();
+  if (naApostas() && lerEstado()) log("Tenho uma conferência guardada. Toque em “Continuar” para seguir de onde parou (ou em Recomeçar).");
   $(".diag").onclick = function () {
     var s = JSON.stringify(diagnostico(), null, 1);
     log("Diagnóstico (copiado; cole na conversa do Claude):\n" + s);
