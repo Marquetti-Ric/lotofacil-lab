@@ -657,6 +657,24 @@ body[data-game="lc"] #tabs { display: none; }
       <div class="kpis" id="valoresGrid"></div>
       <p class="small muted" id="valoresNote"></p>
     </div>
+    <div class="card" id="calcCard">
+      <h2>Calculadora da verdade</h2>
+      <p class="small muted">Viu uma promessa do tipo “14 pontos com 14 jogos”? Coloque quantos jogos e de quantas dezenas, e veja a chance real, o custo e quanto volta em média. Vale para qualquer sistema, inclusive o nosso.</p>
+      <div class="row" style="flex-wrap:wrap;gap:10px">
+        <div class="field"><label class="label" for="calcN">Jogos por concurso</label><input id="calcN" type="number" inputmode="numeric" min="1" max="100000" value="14"></div>
+        <div class="field"><label class="label" for="calcK">Dezenas por jogo</label><select id="calcK"></select></div>
+        <div class="field" id="calcTBox" hidden><label class="label" for="calcT">Trevos por jogo</label><select id="calcT"><option>2</option><option>3</option><option>4</option><option>5</option><option>6</option></select></div>
+      </div>
+      <div id="calcOut"></div>
+      <details style="margin-top:8px">
+        <summary>Conferir uma promessa</summary>
+        <div class="row" style="flex-wrap:wrap;gap:10px;align-items:flex-end">
+          <div class="field"><label class="label" for="calcPromPct">Prometem (%)</label><input id="calcPromPct" type="text" inputmode="decimal" placeholder="Ex.: 76,9"></div>
+          <div class="field"><label class="label" for="calcPromTier">de chance de</label><select id="calcPromTier"></select></div>
+        </div>
+        <p class="small" id="calcPromOut"></p>
+      </details>
+    </div>
     <div class="card">
       <h2>Sobre as chances</h2>
       <p class="small" id="chancesText"></p>
@@ -24128,11 +24146,108 @@ function ticketsChecked(c, key) {
     ${vis.length ? "" : `<p class="small muted">Nenhum jogo nessa faixa.</p>`}
     <div class="tickets">${vis.map(([x, i]) => `<div class="ticket"><span class="idx">${pad(i + 1)}</span><div>${betLabel(x.t)}${ballsHTML(x.t, c.set)}</div><span class="pts" style="color:var(--${x.best >= CFG.minHit ? "good" : "muted"})">${x.h} ${CFG.hitShort}${(isMM() ? x.won : isMulti(x.t) && x.won) ? "<br>" + brl(x.won) : ""}</span></div>`).join("")}</div>`;
 }
+/* ---------- Calculadora da verdade e "esperado pelo acaso" (contas exatas, hipergeométrica) ---------- */
+function cmb(n, k) { if (k < 0 || k > n) return 0; k = Math.min(k, n - k); let r = 1; for (let i = 1; i <= k; i++) r = (r * (n - k + i)) / i; return r; }
+const hyp = (N, D, k, m) => (cmb(k, m) * cmb(N - k, D - m)) / cmb(N, D);
+// Faixas (do melhor resultado possível de um jogo com k dezenas e t trevos): [{key, label, p, prize}]
+function faixasDe(k, t = 2) {
+  const N = CFG.N, D = CFG.drawLen, out = [];
+  if (isMM()) {
+    const pt = (j) => (cmb(t, j) * cmb(6 - t, 2 - j)) / cmb(6, 2);
+    for (let m = 6; m >= 2; m--) {
+      const pd = hyp(N, 6, k, m);
+      if (m >= 4) { out.push({ key: m + "+2", label: `${m} dezenas + 2 trevos`, p: pd * pt(2) }); out.push({ key: m + "+", label: `${m} dezenas (0 ou 1 trevo)`, p: pd * (pt(0) + pt(1)) }); }
+      else { out.push({ key: m + "+2", label: `${m} dezenas + 2 trevos`, p: pd * pt(2) }); out.push({ key: m + "+1", label: `${m} dezenas + 1 trevo`, p: pd * pt(1) }); }
+    }
+    return out;
+  }
+  if (isLM()) { for (let m = 20; m >= 15; m--) out.push({ key: m, label: `${m} acertos`, p: hyp(N, D, k, m) }); out.push({ key: 0, label: "0 acertos", p: hyp(N, D, k, 0) }); return out; }
+  const top = Math.min(D, k);
+  for (let m = top; m >= CFG.minHit; m--) out.push({ key: m, label: `${m} ${CFG.hitWord}`, p: hyp(N, D, k, m) });
+  if (isTM()) out.push({ key: "time", label: "Time do Coração", p: 1 / 80 });
+  return out;
+}
+// Aposta simples: valor médio devolvido, variância e chance de algum prêmio (com os valores da aba Dados)
+function simplesEV() {
+  const f = faixasDe(isMM() ? 6 : CFG.betMin, 2);
+  let ev = 0, ev2 = 0;
+  f.forEach((x) => { const v = isMM() ? S.settings["p" + x.key] || 0 : x.key === "time" ? S.settings.ptime || 0 : prizeFor(x.key); ev += x.p * v; ev2 += x.p * v * v; });
+  return { ev, vr: Math.max(0, ev2 - ev * ev) };
+}
+const multDe = (k, t = 2) => (isMM() ? cmb(k, 6) * cmb(t, 2) : cmb(k, CFG.K));
+function calcModelo(n, k, t) {
+  const f = faixasDe(k, t), sev = simplesEV(), mult = multDe(k, t), price = (S.settings.price || 0) * mult;
+  let acum = 0;
+  const linhas = f.map((x) => { if (x.key !== "time" && x.key !== 0) acum += x.p; return { ...x, pc: x.key === "time" || x.key === 0 ? x.p : acum }; });
+  return { linhas, custo: n * price, retorno: n * mult * sev.ev, porCem: price ? (100 * sev.ev) / (S.settings.price || 1) : 0 };
+}
+const pctCalc = (v) => (v >= 0.995 ? ">99%" : v >= 0.01 ? (v * 100).toLocaleString("pt-BR", { maximumFractionDigits: 1 }) + "%" : v >= 0.0001 ? (v * 100).toLocaleString("pt-BR", { maximumFractionDigits: 3 }) + "%" : v > 0 ? "1 em " + intBR(1 / v) : "0%");
+const umACada = (v) => (v >= 0.5 ? "quase todo concurso" : v > 0 ? intBR(Math.round(1 / v)) + " concursos" : "—");
+function renderCalc() {
+  if (!$("#calcCard")) return;
+  const ks = []; for (let k = CFG.betMin; k <= CFG.betMax; k++) ks.push(k);
+  const kSel = $("#calcK");
+  if (kSel.dataset.g !== GID) { kSel.innerHTML = ks.map((k) => `<option value="${k}">${k}</option>`).join(""); kSel.value = String(CFG.betMin); kSel.dataset.g = GID; kSel.disabled = ks.length === 1; $("#calcN").value = GID === "lf" ? 14 : 10; }
+  $("#calcTBox").hidden = !isMM();
+  const n = Math.max(1, Math.min(100000, Math.round(+$("#calcN").value || 1))), k = +kSel.value || CFG.betMin, t = isMM() ? +$("#calcT").value || 2 : 2;
+  const md = calcModelo(n, k, t);
+  const principal = md.linhas[0];
+  const rows = md.linhas.filter((x) => x.key !== 0 && x.key !== "time").map((x) => {
+    const pn = 1 - Math.pow(1 - x.pc, n), teto = Math.min(1, n * x.pc);
+    return `<tr><td>${x === principal ? x.label : x.label + " ou mais"}</td><td>${pctCalc(x.pc)}</td><td><b>${pctCalc(pn)}</b></td><td class="muted">${pctCalc(teto)}</td><td>${umACada(pn)}</td></tr>`;
+  });
+  md.linhas.filter((x) => x.key === 0 || x.key === "time").forEach((x) => { const pn = 1 - Math.pow(1 - x.p, n); rows.push(`<tr><td>${x.label}</td><td>${pctCalc(x.p)}</td><td><b>${pctCalc(pn)}</b></td><td class="muted">${pctCalc(Math.min(1, n * x.p))}</td><td>${umACada(pn)}</td></tr>`); });
+  const prom = $("#calcPromTier"), prevT = prom.value;
+  prom.innerHTML = md.linhas.map((x, i) => `<option value="${i}">${x.key === 0 || x.key === "time" || i === 0 ? x.label : x.label + " ou mais"}</option>`).join("");
+  if (prevT && prom.options[+prevT] && prom.dataset.g === GID) prom.value = prevT; else { prom.dataset.g = GID; const def = GID === "lf" ? md.linhas.findIndex((x) => x.key === 13) : 1; prom.value = String(Math.max(0, def)); }
+  $("#calcOut").innerHTML = `
+    <div style="overflow-x:auto"><table class="small" style="width:100%;border-collapse:collapse;margin:8px 0">
+      <thead><tr style="text-align:left"><th>Resultado</th><th>Por jogo</th><th>Com ${intBR(n)} ${n === 1 ? "jogo" : "jogos"}</th><th title="Nenhuma combinação de jogos, por melhor que seja, passa deste valor">Teto*</th><th>Acontece 1 vez a cada</th></tr></thead>
+      <tbody>${rows.join("")}</tbody></table></div>
+    <div class="kpis">
+      <div class="kpi"><b>${brl(md.custo)}</b><span>custo por concurso</span></div>
+      <div class="kpi"><b>${brl(md.retorno)}</b><span>volta em média por concurso${isMM() || CFG.id === "lf" ? "" : " (valores de referência)"}</span></div>
+      <div class="kpi"><b>${brl(md.porCem)}</b><span>de cada R$ 100 apostados${CFG.id === "lf" ? " (sem 14 e 15)" : ""}</span></div>
+    </div>
+    <p class="small muted">“Com ${intBR(n)} jogos” vale para jogos diferentes entre si. *O teto é o máximo possível com ${intBR(n)} jogos, mesmo com o melhor fechamento ou “sistema inteligente” do mundo: nenhum método passa dele. Fechamentos e filtros só redistribuem os resultados; o retorno médio é sempre o mesmo. Os prêmios usam os valores da aba Dados.</p>`;
+  renderPromessa(md, n);
+}
+function renderPromessa(md, n) {
+  const raw = ($("#calcPromPct").value || "").replace(",", ".").replace("%", "").trim(), v = parseFloat(raw) / 100;
+  const x = md.linhas[+$("#calcPromTier").value || 0];
+  if (!raw || !(v > 0) || !x) { $("#calcPromOut").textContent = "Digite a porcentagem prometida e a faixa (ex.: 76,9% de 13 pontos ou mais)."; return; }
+  const real = 1 - Math.pow(1 - (x.key === 0 || x.key === "time" ? x.p : x.pc), n), teto = Math.min(1, n * (x.key === 0 || x.key === "time" ? x.p : x.pc));
+  const vezes = v / real;
+  $("#calcPromOut").innerHTML = v > teto + 1e-9
+    ? `<b style="color:var(--bad)">Impossível.</b> Com ${intBR(n)} jogos, a chance real é de ${pctCalc(real)}, e o máximo que qualquer combinação de jogos alcança é ${pctCalc(teto)}. A promessa é ${vezes >= 10 ? intBR(Math.round(vezes)) : vezes.toLocaleString("pt-BR", { maximumFractionDigits: 1 })} vezes maior que a realidade.`
+    : `A chance real é de ${pctCalc(real)} (teto de ${pctCalc(teto)}). ${v > real * 1.05 ? "A promessa está acima do normal: só seria possível com jogos muito bem distribuídos, e mesmo assim não muda o retorno médio." : "A promessa está dentro do que a matemática permite."}`;
+}
+["#calcN", "#calcK", "#calcT", "#calcPromTier"].forEach((id) => { const e = document.querySelector(id); if (e) { e.addEventListener("input", renderCalc); e.addEventListener("change", renderCalc); } });
+document.querySelector("#calcPromPct") && document.querySelector("#calcPromPct").addEventListener("input", renderCalc);
+// Esperado pelo acaso para uma lista de apostas (para o placar)
+function esperadoAcaso(bets) {
+  const sev = simplesEV();
+  let ev = 0, vr = 0;
+  bets.forEach((t) => {
+    let mult;
+    if (isMM()) { const sp = C.split(t); mult = cmb(sp.d.length, 6) * cmb(sp.t.length, 2); }
+    else mult = cmb(t.length, CFG.K);
+    ev += mult * sev.ev; vr += mult * sev.vr;
+  });
+  return { ev, sd: Math.sqrt(vr) };
+}
 function renderConferir() {
   let spent = 0, won = 0, checked = 0, bigs = 0;
   S.batches.forEach((b) => { const c = checkBatch(b); if (c) { spent += b.cost; won += c.fixedWon; checked++; bigs += c.big; } });
   const pending = S.batches.filter((b) => !checkBatch(b));
   const bal = won - spent;
+  let acaso = null;
+  try { const bets = []; S.batches.forEach((b) => { if (checkBatch(b)) bets.push(...(b.bets || b.tickets)); }); if (bets.length) acaso = esperadoAcaso(bets); } catch (e) { acaso = null; }
+  const acasoTxt = acaso && spent > 0 ? (() => {
+    const z = acaso.sd > 0 ? (won - acaso.ev) / acaso.sd : 0;
+    const veredito = z > 2 ? `<b style="color:var(--good)">acima do esperado: sorte</b>` : z < -2 ? `<b style="color:var(--bad)">abaixo do esperado: azar</b>` : "<b>dentro da variação normal</b>";
+    return `<div class="note" style="margin-top:8px"><b>Seus jogos x acaso puro.</b> Com jogos escolhidos totalmente ao acaso, essas mesmas apostas devolveriam em média <b>${brl(acaso.ev)}</b> (variação normal: de ${brl(Math.max(0, acaso.ev - 2 * acaso.sd))} a ${brl(acaso.ev + 2 * acaso.sd)}). Você recebeu ${brl(won)}: ${veredito}. De cada R$ 100 apostados, o acaso devolve ${brl((100 * acaso.ev) / spent)} e os seus jogos devolveram ${brl((100 * won) / spent)}.${CFG.bigNote ? " Os valores não incluem " + CFG.bigNote.replace(/^\s*\(sem contar /, "").replace(/\)$/, "") + "." : ""}</div>`;
+  })() : "";
   $("#placar").innerHTML = `
     <h2>Placar</h2>
     <div class="kpis">
@@ -24140,6 +24255,7 @@ function renderConferir() {
       <div class="kpi"><b>${brl(won)}</b><span>${CFG.placarLabel}</span></div>
       <div class="kpi"><b style="color:var(--${bal >= 0 ? "good" : "bad"})">${brl(bal)}</b><span>saldo${bigs ? CFG.bigNote : ""}</span></div>
     </div>
+    ${acasoTxt}
     ${pending.length ? `<p class="small muted">${pending.length} ${pending.length === 1 ? "lote aguardando" : "lotes aguardando"} resultado (${brl(pending.reduce((a, b) => a + b.cost, 0))}).</p>` : ""}
     <p class="small muted">Gasto neste mês: ${brl(monthSpent())}${S.settings.limit > 0 ? ` de ${brl(S.settings.limit)} do seu limite` : ""}.</p>`;
   if (!S.batches.length) {
@@ -24251,6 +24367,7 @@ function renderValores() {
   $("#valoresNote").textContent = CFG.valoresNote;
 }
 $("#valoresGrid").addEventListener("change", (e) => {
+  setTimeout(() => { try { renderCalc(); } catch (x) {} }, 0);
   const k = e.target.dataset.k; if (!k) return;
   const v = parseMoney(e.target.value);
   if (v >= 0) { S.settings[k] = v; store.save(); updateBudget(); toast("Valor atualizado"); }
@@ -24732,6 +24849,7 @@ function applyGame() {
   $("#loose").placeholder = CFG.loosePlaceholder;
   $("#importFmt").textContent = CFG.importFmt;
   $("#chancesText").textContent = CFG.chancesText;
+  try { renderCalc(); } catch (e) { console.error(e); }
   $("#fcSug").textContent = `Sugerir ${CFG.fcSug}`;
   $("#overlap").innerHTML = CFG.overlapOpts.map(([v, l]) => `<option value="${v}"${v === S.overlap ? " selected" : ""}>${l}</option>`).join("");
   $("#fcK").innerHTML = CFG.fcK.map(([v, l]) => `<option value="${v}"${v === CFG.fcKdef ? " selected" : ""}>${l}</option>`).join("");
