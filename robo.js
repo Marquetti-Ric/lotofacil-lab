@@ -425,7 +425,7 @@
     return "<" + el.tagName.toLowerCase() + at + (r.width ? " [" + Math.round(r.width) + "x" + Math.round(r.height) + "]" : "") + ">" + t + filhos + "</" + el.tagName.toLowerCase() + ">";
   }
   function diagnostico() {
-    var g = jogoDaPagina(), d = { robo: "v7", rota: location.hash || location.pathname, titulo: document.title, detectado: detectar(), escolhido: g };
+    var g = jogoDaPagina(), d = { robo: "v8", rota: location.hash || location.pathname, titulo: document.title, detectado: detectar(), escolhido: g };
     d.titulos = Array.prototype.slice.call(document.querySelectorAll("h1, h2, h3")).filter(vis).slice(0, 6).map(function (h) { return h.innerText.trim().slice(0, 60); });
     if (g) {
       mapa = mapear(g);
@@ -706,6 +706,72 @@
     log(rel);
     if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(rel).catch(function () {});
   }
+  /* Diagnóstico da conferência de prêmios: filtros, pedido ao servidor e recarga na moldura.
+     Só lê. Tira números longos (CPF, documentos) e não copia nomes. */
+  function limpar(s) { return String(s == null ? "" : s).replace(/\d{6,}/g, "#").replace(/[\w.+-]+@[\w-]+\.[\w.]+/g, "@").slice(0, 400); }
+  function formaJSON(v, nv) {
+    nv = nv || 0;
+    if (Array.isArray(v)) return "[" + v.length + (v.length && nv < 3 ? ": " + formaJSON(v[0], nv + 1) : "") + "]";
+    if (v && typeof v === "object") { if (nv > 3) return "{…}"; return "{" + Object.keys(v).slice(0, 25).map(function (k) { var x = v[k]; return k + (x && typeof x === "object" ? ":" + formaJSON(x, nv + 1) : typeof x === "number" ? ":" + (Math.abs(x) < 100000 ? x : "#") : ":" + typeof x); }).join(", ") + "}"; }
+    return typeof v;
+  }
+  async function diagPremios() {
+    var d = { robo: "v8", rota: location.hash, tabela: (lerLinhas() || []).length + " linhas", paginacao: null, selects: [], aplicar: desc(botaoD(/^APLICAR$/)), guardado: null, pedidos: [], moldura: null };
+    var pg = paginacao(); if (pg) d.paginacao = "página " + pg.atual + " de " + pg.total;
+    d.selects = selectsD().map(function (s, i) { return { i: i, id: s.id || "", ng: s.getAttribute("ng-model") || s.getAttribute("formcontrolname") || s.getAttribute("name") || "", atual: s.options[s.selectedIndex] ? s.options[s.selectedIndex].text.trim() : "", opcoes: Array.prototype.map.call(s.options, function (o) { return o.text.trim(); }).slice(0, 15) }; });
+    var e = lerEstado(); if (e) d.guardado = { parou: e.parou, total: e.total, filtros: e.filtros, apostas: (e.todas || []).length };
+    try { d.armazenamento = { local: !!localStorage.getItem(CHAVE), sessao: !!sessionStorage.getItem(CHAVE), aba: String(window.name).indexOf("lflab:") === 0 }; } catch (x) { d.armazenamento = "erro: " + x.message; }
+    // 1) troca de filtro: tenta mudar a última opção de período e voltar
+    var sels = selectsD();
+    var sp = sels.filter(function (s) { return /DIAS|MES|PERIODO|ANO/.test(norm(Array.prototype.map.call(s.options, function (o) { return o.text; }).join(" "))); })[0];
+    // 2) escuta os pedidos ao servidor enquanto toca em Aplicar
+    var XO = XMLHttpRequest.prototype.open, XS = XMLHttpRequest.prototype.send, XH = XMLHttpRequest.prototype.setRequestHeader, F = window.fetch;
+    XMLHttpRequest.prototype.open = function (m, u) { this.__lf = { tipo: "xhr", metodo: m, url: limpar(u), cab: [] }; return XO.apply(this, arguments); };
+    XMLHttpRequest.prototype.setRequestHeader = function (k) { if (this.__lf) this.__lf.cab.push(k); return XH.apply(this, arguments); };
+    XMLHttpRequest.prototype.send = function (b) {
+      var x = this, info = x.__lf;
+      if (info) { info.corpo = limpar(typeof b === "string" ? b : b ? "[" + (b.constructor && b.constructor.name) + "]" : ""); x.addEventListener("loadend", function () { info.status = x.status; try { info.resposta = formaJSON(JSON.parse(x.responseText)); } catch (er) { info.resposta = (x.getResponseHeader("content-type") || "") + " " + (x.responseText || "").length + "b"; } d.pedidos.push(info); }); }
+      return XS.apply(this, arguments);
+    };
+    if (F) window.fetch = function (u, o) { var info = { tipo: "fetch", metodo: (o && o.method) || "GET", url: limpar(u && u.url || u), corpo: limpar(o && o.body), cab: o && o.headers ? Object.keys(o.headers instanceof Headers ? Object.fromEntries(o.headers) : o.headers) : [] }; return F.apply(this, arguments).then(function (r) { info.status = r.status; r.clone().json().then(function (j) { info.resposta = formaJSON(j); }).catch(function () { info.resposta = r.headers.get("content-type"); }); d.pedidos.push(info); return r; }); };
+    try {
+      if (sp) {
+        var antes = sp.selectedIndex, alvo = antes === sp.options.length - 1 ? 0 : sp.options.length - 1;
+        sp.selectedIndex = alvo; sp.dispatchEvent(new Event("input", { bubbles: true })); sp.dispatchEvent(new Event("change", { bubbles: true }));
+        await wait(300);
+        d.trocaFiltro = { de: sp.options[antes].text.trim(), para: sp.options[alvo].text.trim(), ficou: sp.options[sp.selectedIndex].text.trim() };
+        var a0 = assinatura(), ap = botaoD(/^APLICAR$/); if (ap) ap.click();
+        d.trocaFiltro.listaMudou = await esperarMudar(a0, 60);
+        var pg2 = paginacao(); d.trocaFiltro.paginacaoDepois = pg2 ? pg2.total + " páginas" : "sem paginação";
+        sp.selectedIndex = antes; sp.dispatchEvent(new Event("input", { bubbles: true })); sp.dispatchEvent(new Event("change", { bubbles: true }));
+        var a1 = assinatura(); if (ap) ap.click(); await esperarMudar(a1, 60);
+      } else {
+        var ap2 = botaoD(/^APLICAR$/), a2 = assinatura(); if (ap2) { ap2.click(); await esperarMudar(a2, 50); }
+      }
+      // e uma troca de página
+      var pg3 = paginacao();
+      if (pg3 && pg3.total > 1) { var a3 = assinatura(); clicarPagina(pg3, pg3.atual === 2 ? 1 : 2); d.trocaPagina = await esperarMudar(a3, 60); }
+      await wait(800);
+    } finally {
+      XMLHttpRequest.prototype.open = XO; XMLHttpRequest.prototype.send = XS; XMLHttpRequest.prototype.setRequestHeader = XH; if (F) window.fetch = F;
+    }
+    d.pedidos = d.pedidos.filter(function (p) { return !/\.(js|css|png|jpg|svg|woff2?)(\?|$)/i.test(p.url) && !/google|analytics|hotjar|clarity|facebook/i.test(p.url); }).slice(-12);
+    // 3) moldura: a Caixa deixa abrir a lista dentro da página?
+    var f = document.createElement("iframe");
+    f.style.cssText = "position:fixed;inset:0;width:100vw;height:100vh;border:0;z-index:2147483646;background:#fff";
+    f.src = location.href.split("#")[0] + "#/apostas";
+    document.body.appendChild(f);
+    var m = { acessivel: false };
+    for (var z = 0; z < 100; z++) {
+      await wait(200);
+      try { var dd = f.contentDocument; if (dd && dd.body) { m.acessivel = true; m.rota = f.contentWindow.location.hash; m.titulos = Array.prototype.map.call(dd.querySelectorAll("h1, h2, h3"), function (h) { return limpar(h.innerText).slice(0, 50); }).slice(0, 5); var tb = Array.prototype.filter.call(dd.querySelectorAll("table"), function (t) { return /SITUACAO/.test(norm(t.innerText.slice(0, 400))); })[0]; m.tabela = !!tb; m.selects = dd.querySelectorAll("select").length; m.login = /ENTRAR|ACESSAR SUA CONTA|CPF/.test(norm(dd.body.innerText.slice(0, 3000))); if (tb && z > 10) break; } } catch (er) { m.erro = er.name; }
+    }
+    m.segundos = Math.round(z / 5);
+    try { f.remove(); } catch (er) {}
+    d.moldura = m;
+    return d;
+  }
+  function copiarAntigo(t) { var ta = document.createElement("textarea"); ta.value = t; ta.style.cssText = "position:fixed;top:0;left:0;opacity:0"; document.body.appendChild(ta); ta.select(); var ok = false; try { ok = document.execCommand("copy"); } catch (x) {} ta.remove(); return ok; }
   function atualizarBotaoPremios() {
     var e = lerEstado();
     $(".premios").textContent = e && e.parou ? "Continuar conferência (da página " + e.parou + (e.total ? " de " + e.total : "") + ")" : "Conferir prêmios não resgatados";
@@ -723,7 +789,7 @@
   box.id = "lflab-robo";
   var opts = "<option value='auto'>Automático</option>" + Object.keys(JOGOS).map(function (k) { return "<option value='" + k + "'>" + JOGOS[k].nome + "</option>"; }).join("");
   box.innerHTML = "<style>" + css + "</style><button class='x' title='Fechar'>×</button>" +
-    "<h3>Robô do Lotofácil Lab <small style='font-weight:400;color:#888'>v7</small></h3><div class='row'><span>Modalidade:</span><select class='modal'>" + opts + "</select><span class='jogo small'></span></div>" +
+    "<h3>Robô do Lotofácil Lab <small style='font-weight:400;color:#888'>v8</small></h3><div class='row'><span>Modalidade:</span><select class='modal'>" + opts + "</select><span class='jogo small'></span></div>" +
     "<textarea placeholder='Cole aqui os jogos, um por linha.\nEx.: 01 02 05 07 09 10 13 14 16 18 20 22 23 24 25'></textarea>" +
     "<div class='row'><button class='sec colar'>Colar</button><button class='go ir'>Colocar no carrinho</button><button class='sec parar' hidden>Parar</button><button class='sec diag'>Diagnóstico</button></div><div class='row'><button class='go premios' style='background:#19794a'>Conferir prêmios não resgatados</button><button class='sec recomecar' hidden>Recomeçar</button><label style='font-size:12.5px'><input type='checkbox' class='autoRec' checked> recarregar a lista sozinho quando o site ficar lento</label><label style='font-size:12.5px'><input type='checkbox' class='atalho' checked> usar o filtro “Premiadas” da Caixa, se houver</label></div>" +
     "<div class='bar'><i></i></div><div class='log'>Entre na sua conta, abra a página da modalidade e cole os jogos. O robô só monta o carrinho: a conferência e o pagamento são seus.</div>";
@@ -750,7 +816,24 @@
   $(".recomecar").onclick = function () { apagarEstado(); atualizarBotaoPremios(); log("Progresso apagado: a próxima conferência começa da página 1."); };
   atualizarBotaoPremios();
   if (naApostas() && lerEstado()) log("Tenho uma conferência guardada. Toque em “Continuar” para seguir de onde parou (ou em Recomeçar).");
-  $(".diag").onclick = function () {
+  $(".diag").onclick = async function () {
+    if (naApostas()) {
+      $(".diag").disabled = true;
+      log("Diagnóstico da conferência: vou trocar o período e voltar, mudar de página e testar a recarga (uns 30 segundos)…");
+      var dp; try { dp = await diagPremios(); } catch (er) { dp = { erro: String(er && er.message || er) }; }
+      $(".diag").disabled = false;
+      var sp = JSON.stringify(dp, null, 1);
+      log("Diagnóstico pronto. Toque em \u201cCopiar diagnóstico\u201d e cole na conversa do Claude (Cmd+V):\n" + sp);
+      var bc = box.querySelector(".copiarDiag");
+      if (!bc) { bc = document.createElement("button"); bc.className = "go copiarDiag"; bc.textContent = "Copiar diagnóstico"; $(".diag").parentElement.appendChild(bc); }
+      bc.onclick = function () {
+        var ok = function () { bc.textContent = "Copiado ✓"; setTimeout(function () { bc.textContent = "Copiar diagnóstico"; }, 2500); };
+        if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(sp).then(ok).catch(function () { copiarAntigo(sp) && ok(); });
+        else if (copiarAntigo(sp)) ok();
+      };
+      if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(sp).catch(function () {});
+      return;
+    }
     var s = JSON.stringify(diagnostico(), null, 1);
     log("Diagnóstico (copiado; cole na conversa do Claude):\n" + s);
     if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(s).catch(function () {});
